@@ -1,0 +1,27 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+
+}
+
+datasource db {
+  provider = "postgresql"
+  url=env("DATABASE_URL")
+}
+
+model Document{
+  id String @id @default(uuid())
+  filename String
+  mimeType String
+  status String @default("QUEUED")
+  fileKey String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  chunks Chunk[]
+  chatMessages ChatMessage[]
+}
+
