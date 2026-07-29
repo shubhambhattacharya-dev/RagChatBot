@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url=env("DATABASE_URL")
+
 }
 
 model Document{
@@ -21,7 +21,5 @@ model Document{
   fileKey String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  chunks Chunk[]
-  chatMessages ChatMessage[]
 }
 
