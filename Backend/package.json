@@ -8,6 +8,12 @@
     "jest": "^30.4.2",
     "prisma": "^7.9.1"
   },
+
+ 
+  "scripts": {
+    "dev": "bun --watch src/app.ts"
+  },
+
   "peerDependencies": {
     "typescript": "^5"
   },

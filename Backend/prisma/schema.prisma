@@ -5,11 +5,13 @@
 
 generator client {
   provider = "prisma-client"
+  output   = "../.prisma/client"
 
 }
 
 datasource db {
   provider = "postgresql"
+  
 
 }
 
@@ -21,5 +23,32 @@ model Document{
   fileKey String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  chunks Chunk[]
+  chatMessage ChatMessage[]
 }
 
+model Chunk{
+  id String @id @default(uuid())
+  documentId String
+  document Document @relation(fields: [documentId],references: [id])
+  content String @db.Text
+  embedding Unsupported("vector(768)")?
+  metadata Json?
+  chunkIndex Int
+  createdAT DateTime @default(now())
+
+
+  @@index([documentId])
+  @@index([metadata],type:Gin)
+
+}
+
+model ChatMessage{
+  id String @id @default(uuid())
+  documentId String
+  document Document @relation(fields: [documentId],references: [id])
+  question String @db.Text
+  answer String @db.Text
+  sources Json?
+  createdAt DateTime @default(now())
+}
