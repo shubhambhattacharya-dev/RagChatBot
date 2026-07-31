@@ -394,23 +394,8 @@ async function streamResponse(question, typingEl) {
     }
   }
 
-  // Final render
-  let html = renderMD(text);
-  if (sources.length > 0) {
-    const chips = sources
-      .map((s, i) => {
-        const label =
-          (typeof s === 'string' ? s : s.filename || s.title) ||
-          `Source ${i + 1}`;
-        const short = label.length > 60 ? label.slice(0, 60) + '…' : label;
-        return `<span class="source-chip" title="${escapeHTML(label)}">
-          <span class="source-num">${i + 1}</span>
-          ${escapeHTML(short)}
-        </span>`;
-      })
-      .join('');
-    html += `<div class="sources-wrap"><span class="sources-label">Sources</span>${chips}</div>`;
-  }
+  // Final render (sources hidden — retrieval happens under the hood)
+  const html = renderMD(text);
   content.innerHTML = html;
 
   state.messages.push({ role: 'user', content: question });
