@@ -7,6 +7,30 @@ import prisma from "../../config/prisma";
 
 import { processDocument } from "./processor";
 
+// Whitelist: extension → expected MIME (check both — never trust just one)
+const ALLOWED_TYPES: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".txt": "text/plain",
+  ".md": "text/markdown",
+};
+
+function validateFile(filename: string, mimetype: string): string | null {
+  const ext = "." + (filename.split(".").pop() || "").toLowerCase();
+
+  if (!ALLOWED_TYPES[ext]) {
+    return `File type "${ext || "(none)"}" not allowed. Use PDF, DOCX, TXT, or MD.`;
+  }
+
+  // Loose MIME check — some browsers send "application/octet-stream" for .docx
+  const expected = ALLOWED_TYPES[ext];
+  if (mimetype && mimetype !== "application/octet-stream" && !mimetype.startsWith(expected.split("/")[0] + "/")) {
+    return `File content looks like ${mimetype}, not ${expected}.`;
+  }
+
+  return null;
+}
+
 export async function handleUpload(
   request: FastifyRequest,
   reply: FastifyReply
@@ -19,6 +43,12 @@ export async function handleUpload(
       return reply.status(400).send({
         message: "No file uploaded.",
       });
+    }
+
+    // Validate type BEFORE any storage — reject early
+    const validationError = validateFile(file.filename, file.mimetype);
+    if (validationError) {
+      return reply.status(400).send({ message: validationError });
     }
 
     // 2. Convert stream → Buffer
