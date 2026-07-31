@@ -12,7 +12,7 @@ import { chatRoutes } from "./modules/chat/routes";
 export async function buildApp(){
     const app=fastify({logger:{level:env.LOG_LEVEL}})
     //plugin
-await app.register(cors,{origin:true})
+await app.register(cors,{origin:true, methods:['GET','HEAD','POST','PUT','PATCH','DELETE']})
 await app.register(multipart,{limits:{fileSize:20*1024*1024}});
 // serve frontend from ../Frontend (same origin — no CORS)
 await app.register(staticFiles, {
