@@ -16,4 +16,4 @@ export async function ensureBucket(){
         await minio.makeBucket(env.MINIO_BUCKET);
         console.log(`Create bucket: ${env.MINIO_BUCKET}`)
     }
-}
+} 

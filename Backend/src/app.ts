@@ -3,12 +3,14 @@ import cors from '@fastify/cors'
 import multipart from "@fastify/multipart"
 import {env} from './config/env'
 import { ensureBucket } from "./config/minio";
+import { uploadRoutes } from "./modules/upload/router";
 
 export async function buildApp(){
     const app=fastify({logger:{level:env.LOG_LEVEL}})
     //plugin
 await app.register(cors,{origin:true})
 await app.register(multipart,{limits:{fileSize:20*1024*1024}});
+await app.register(uploadRoutes)
 
 app.get("/health", async () => {
   return {
