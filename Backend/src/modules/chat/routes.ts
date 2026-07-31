@@ -6,11 +6,12 @@ import { setupSSE, sendSSE, sendSSEDone } from "../../utils/sse";
 
 interface ChatBody {
   question: string;
+  documentId?: string;
 }
 
 const TOP_K = 5;
 
-async function handleChat(question: string, reply: FastifyReply) {
+async function handleChat(question: string, reply: FastifyReply, documentId?: string) {
   setupSSE(reply);
 
   try {
@@ -20,13 +21,21 @@ async function handleChat(question: string, reply: FastifyReply) {
     // Convert embedding to pgvector format
     const vector = `[${queryEmbedding.join(",")}]`;
 
-    // Retrieve the most relevant chunks
-    const chunks = await prisma.$queryRaw<{ content: string }[]>`
-      SELECT content
-      FROM "Chunk"
-      ORDER BY embedding <=> ${vector}::vector
-      LIMIT ${TOP_K}
-    `;
+    // Retrieve the most relevant chunks — scoped to one document when selected
+    const chunks = documentId
+      ? await prisma.$queryRaw<{ content: string }[]>`
+          SELECT content
+          FROM "Chunk"
+          WHERE "documentId" = ${documentId}
+          ORDER BY embedding <=> ${vector}::vector
+          LIMIT ${TOP_K}
+        `
+      : await prisma.$queryRaw<{ content: string }[]>`
+          SELECT content
+          FROM "Chunk"
+          ORDER BY embedding <=> ${vector}::vector
+          LIMIT ${TOP_K}
+        `;
 
     const contextChunks = chunks.map((chunk) => chunk.content);
 
@@ -67,7 +76,10 @@ async function handleChat(question: string, reply: FastifyReply) {
 export async function chatRoutes(app: FastifyInstance) {
   // Frontend uses GET with ?question= for SSE streaming
   app.get("/chat", async (request, reply) => {
-    const { question } = request.query as { question?: string };
+    const { question, documentId } = request.query as {
+      question?: string;
+      documentId?: string;
+    };
 
     if (!question?.trim()) {
       return reply.status(400).send({
@@ -75,12 +87,12 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
 
-    return handleChat(question, reply);
+    return handleChat(question, reply, documentId);
   });
 
   // API clients use POST with JSON body
   app.post("/chat", async (request, reply) => {
-    const { question } = (request.body ?? {}) as ChatBody;
+    const { question, documentId } = (request.body ?? {}) as ChatBody;
 
     if (!question?.trim()) {
       return reply.status(400).send({
@@ -88,6 +100,6 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
 
-    return handleChat(question, reply);
+    return handleChat(question, reply, documentId);
   });
 }

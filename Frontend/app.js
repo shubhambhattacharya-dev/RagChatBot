@@ -10,6 +10,7 @@ const state = {
   history: [],
   messages: [],
   streaming: false,
+  activeDocId: null,
 };
 
 // ==================== DOM ====================
@@ -27,6 +28,8 @@ function initDOM() {
   el.fileInput = $('#fileInput');
   el.dropZone = $('#dropZone');
   el.fileList = $('#fileList');
+  el.docList = $('#docList');
+  el.docsCount = $('#docsCount');
   el.historyList = $('#historyList');
   el.clearBtn = $('#clearChat');
   el.welcome = $('#welcomeScreen');
@@ -208,6 +211,7 @@ async function pollStatus(docId, file) {
       if (doc.status === 'READY' || doc.status === 'ready') {
         updateFileItem(file, 'ready');
         state.docs.push(doc);
+        await loadDocs(); // refresh doc list + auto-select
         return;
       }
       if (doc.status === 'FAILED' || doc.status === 'failed') {
@@ -221,6 +225,79 @@ async function pollStatus(docId, file) {
   }
   updateFileItem(file, 'error');
   toast(`${file.name} timed out`, 'error');
+}
+
+// ==================== DOCUMENTS ====================
+async function loadDocs() {
+  try {
+    const r = await fetch(`${API}/documents`);
+    if (!r.ok) throw new Error('Failed to load documents');
+    state.docs = await r.json();
+    renderDocs();
+  } catch {
+    // Backend offline — silent
+  }
+}
+
+function renderDocs() {
+  el.docsCount.textContent = state.docs.length;
+  el.docList.innerHTML = '';
+
+  if (state.docs.length === 0) {
+    el.docList.innerHTML =
+      '<div class="doc-list-empty">No documents yet — upload one above</div>';
+    return;
+  }
+
+  // Auto-select the first READY doc if nothing selected yet
+  if (!state.activeDocId) {
+    const first = state.docs.find((d) => d.status === 'READY');
+    if (first) state.activeDocId = first.id;
+  }
+
+  for (const doc of state.docs) {
+    const item = document.createElement('div');
+    item.className = `doc-item${doc.id === state.activeDocId ? ' active' : ''}`;
+    item.dataset.id = doc.id;
+    item.title = doc.filename;
+    item.innerHTML = `
+      <span class="doc-icon">${doc.status === 'READY' ? '📕' : '⏳'}</span>
+      <span class="doc-name">${escapeHTML(doc.filename)}</span>
+      <span class="doc-status ${doc.status === 'READY' ? 'ready' : doc.status === 'FAILED' ? 'error' : 'processing'}">${
+        doc.status === 'READY' ? 'Ready' : doc.status === 'FAILED' ? 'Failed' : 'Indexing…'
+      }</span>
+      <button class="doc-delete" title="Delete document" data-id="${doc.id}">
+        <svg width="11" height="11" viewBox="0 0 15 15" fill="none">
+          <path d="M2 4H13M4.5 4V2.5C4.5 2.22 4.72 2 5 2H10C10.28 2 10.5 2.22 10.5 2.5V4M11.5 4V12.5C11.5 12.78 11.28 13 11 13H4C3.72 13 3.5 12.78 3.5 12.5V4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    `;
+
+    // Click body = select active document
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.doc-delete')) return;
+      state.activeDocId = doc.id;
+      renderDocs();
+      toast(`Searching: ${doc.filename}`, 'success', 1500);
+    });
+
+    // Delete button
+    item.querySelector('.doc-delete').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete "${doc.filename}"?`)) return;
+      try {
+        const r = await fetch(`${API}/document/${doc.id}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error('Delete failed');
+        if (state.activeDocId === doc.id) state.activeDocId = null;
+        await loadDocs();
+        toast('Document deleted', 'success', 2000);
+      } catch (err) {
+        toast(`Delete failed: ${err.message}`, 'error');
+      }
+    });
+
+    el.docList.appendChild(item);
+  }
 }
 
 // ==================== CHAT ====================
@@ -253,7 +330,9 @@ async function sendMessage() {
 }
 
 async function streamResponse(question, typingEl) {
-  const res = await fetch(`${API}/chat?question=${encodeURIComponent(question)}`);
+  // Scope search to the active document when one is selected
+  const docParam = state.activeDocId ? `&documentId=${state.activeDocId}` : '';
+  const res = await fetch(`${API}/chat?question=${encodeURIComponent(question)}${docParam}`);
 
   if (!res.ok) {
     typingEl.remove();
@@ -457,5 +536,6 @@ function renderMD(text) {
 }
 
 // ==================== BOOT ====================
+loadDocs();
 console.log('🚀 RAG ChatBot UI ready — Linear-inspired design');
 console.log(`📡 API target: ${API}`);
