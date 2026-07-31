@@ -1,0 +1,19 @@
+# Dependencies
+**/node_modules
+
+# Environment — NEVER ship secrets
+**/.env
+**/.env.*
+
+# Git / IDE
+.git
+.vscode
+.idea
+
+# Logs / temp
+**/*.log
+**/.hermes-*
+
+# Build artifacts
+**/dist
+**/build

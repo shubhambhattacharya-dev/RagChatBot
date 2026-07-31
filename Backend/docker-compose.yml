@@ -1,5 +1,31 @@
 
 services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://pguser:secret@postgres:5432/ragdb
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_BUCKET: rag-files
+      GROQ_API: ${GROQ_API}
+      GEMINI_API: ${GEMINI_API}
+      OPENROUTER_API: ${OPENROUTER_API}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    restart: unless-stopped
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
