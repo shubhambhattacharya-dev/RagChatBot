@@ -1,5 +1,7 @@
 import { FastifyInstance } from "fastify";
 import prisma from "../../config/prisma";
+import { minio } from "../../config/minio";
+import { env } from "../../config/env";
 
 export async function statusRoutes(app: FastifyInstance) {
   // List all documents (for the knowledge-base sidebar)
@@ -43,6 +45,13 @@ export async function statusRoutes(app: FastifyInstance) {
 
     await prisma.chunk.deleteMany({ where: { documentId: id } });
     await prisma.document.delete({ where: { id } });
+
+    // Remove the original file from MinIO too (ignore failure — DB already clean)
+    try {
+      await minio.removeObject(env.MINIO_BUCKET, existing.fileKey);
+    } catch (err) {
+      reply.log.warn(`Failed to remove MinIO object for ${id}: ${err}`);
+    }
 
     return reply.send({ message: "Document deleted", id });
   });
