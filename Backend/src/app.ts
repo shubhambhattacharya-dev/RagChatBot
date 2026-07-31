@@ -1,17 +1,27 @@
 import fastify from "fastify";
 import cors from '@fastify/cors'
 import multipart from "@fastify/multipart"
+import staticFiles from '@fastify/static'
+import { fileURLToPath } from "node:url";
 import {env} from './config/env'
 import { ensureBucket } from "./config/minio";
 import { uploadRoutes } from "./modules/upload/router";
+import { statusRoutes } from "./modules/upload/status";
+import { chatRoutes } from "./modules/chat/routes";
 
 export async function buildApp(){
     const app=fastify({logger:{level:env.LOG_LEVEL}})
     //plugin
 await app.register(cors,{origin:true})
 await app.register(multipart,{limits:{fileSize:20*1024*1024}});
+// serve frontend from ../Frontend (same origin — no CORS)
+await app.register(staticFiles, {
+  root: fileURLToPath(new URL("../../Frontend", import.meta.url)),
+  prefix: "/",
+});
 await app.register(uploadRoutes)
-
+await app.register(statusRoutes)
+await app.register(chatRoutes)
 app.get("/health", async () => {
   return {
     status: "ok",

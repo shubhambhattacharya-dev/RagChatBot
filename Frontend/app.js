@@ -297,12 +297,12 @@ async function streamResponse(question, typingEl) {
 
       try {
         const p = JSON.parse(data);
-        if (p.token) {
-          text += p.token;
+        if (p.type === 'token' && p.content) {
+          text += p.content;
           content.innerHTML = renderMD(text) + '<span class="stream-cursor"></span>';
           scrollBottom();
         }
-        if (p.sources) sources = p.sources;
+        if (p.type === 'sources' && p.chunks) sources = p.chunks;
       } catch {
         /* skip malformed */
       }
@@ -312,18 +312,19 @@ async function streamResponse(question, typingEl) {
   // Final render
   let html = renderMD(text);
   if (sources.length > 0) {
-    html +=
-      `<div class="sources-wrap">` +
-      sources
-        .map(
-          (s, i) =>
-            `<span class="source-chip" title="${escapeHTML(s.filename || s.title || '')}">
-              <span class="source-num">${i + 1}</span>
-              ${escapeHTML(s.filename || s.title || `Source ${i + 1}`)}
-            </span>`
-        )
-        .join('') +
-      `</div>`;
+    const chips = sources
+      .map((s, i) => {
+        const label =
+          (typeof s === 'string' ? s : s.filename || s.title) ||
+          `Source ${i + 1}`;
+        const short = label.length > 60 ? label.slice(0, 60) + '…' : label;
+        return `<span class="source-chip" title="${escapeHTML(label)}">
+          <span class="source-num">${i + 1}</span>
+          ${escapeHTML(short)}
+        </span>`;
+      })
+      .join('');
+    html += `<div class="sources-wrap"><span class="sources-label">Sources</span>${chips}</div>`;
   }
   content.innerHTML = html;
 

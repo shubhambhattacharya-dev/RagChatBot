@@ -1,0 +1,93 @@
+import { FastifyInstance, FastifyReply } from "fastify";
+import prisma from "../../config/prisma";
+import { embedText } from "../../provider/embedding/gemini";
+import { streamChat } from "../../provider/llm/groq";
+import { setupSSE, sendSSE, sendSSEDone } from "../../utils/sse";
+
+interface ChatBody {
+  question: string;
+}
+
+const TOP_K = 5;
+
+async function handleChat(question: string, reply: FastifyReply) {
+  setupSSE(reply);
+
+  try {
+    // Generate embedding for the user's question
+    const queryEmbedding = await embedText(question);
+
+    // Convert embedding to pgvector format
+    const vector = `[${queryEmbedding.join(",")}]`;
+
+    // Retrieve the most relevant chunks
+    const chunks = await prisma.$queryRaw<{ content: string }[]>`
+      SELECT content
+      FROM "Chunk"
+      ORDER BY embedding <=> ${vector}::vector
+      LIMIT ${TOP_K}
+    `;
+
+    const contextChunks = chunks.map((chunk) => chunk.content);
+
+    // Optional: notify client if nothing relevant was found
+    if (contextChunks.length === 0) {
+      sendSSE(reply, {
+        type: "warning",
+        message: "No relevant documents were found.",
+      });
+    }
+
+    // Stream LLM response token-by-token
+    for await (const token of streamChat(question, contextChunks)) {
+      sendSSE(reply, {
+        type: "token",
+        content: token,
+      });
+    }
+
+    // Send retrieved sources
+    sendSSE(reply, {
+      type: "sources",
+      count: contextChunks.length,
+      chunks: contextChunks,
+    });
+  } catch (error) {
+    reply.log.error(error);
+
+    sendSSE(reply, {
+      type: "error",
+      message: "Failed to process your request.",
+    });
+  } finally {
+    sendSSEDone(reply);
+  }
+}
+
+export async function chatRoutes(app: FastifyInstance) {
+  // Frontend uses GET with ?question= for SSE streaming
+  app.get("/chat", async (request, reply) => {
+    const { question } = request.query as { question?: string };
+
+    if (!question?.trim()) {
+      return reply.status(400).send({
+        message: "Question is required",
+      });
+    }
+
+    return handleChat(question, reply);
+  });
+
+  // API clients use POST with JSON body
+  app.post("/chat", async (request, reply) => {
+    const { question } = (request.body ?? {}) as ChatBody;
+
+    if (!question?.trim()) {
+      return reply.status(400).send({
+        message: "Question is required",
+      });
+    }
+
+    return handleChat(question, reply);
+  });
+}
