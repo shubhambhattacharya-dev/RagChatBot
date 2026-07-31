@@ -1,0 +1,46 @@
+# Render Blueprint — one file, whole app.
+# Deploy: New → Blueprint → connect this repo → Render provisions everything.
+# The web service runs the Dockerfile (backend + frontend, same origin).
+# The managed Postgres enables pgvector on boot via scripts/init-db.ts.
+
+services:
+  - type: web
+    name: ragchatbot
+    runtime: docker
+    repo: https://github.com/shubhambhattacharya-dev/RagChatBot
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ragchatbot-db
+          property: connectionString
+      - key: REDIS_URL
+        value: redis://localhost:6379   # unused — schema default kept for parity
+      - key: MINIO_ENDPOINT
+        sync: false                      # set in dashboard: your R2 S3 endpoint host
+      - key: MINIO_PORT
+        value: 443
+      - key: MINIO_USE_SSL
+        value: "true"
+      - key: MINIO_ACCESS_KEY
+        sync: false                      # R2 access key
+      - key: MINIO_SECRET_KEY
+        sync: false                      # R2 secret key
+      - key: MINIO_BUCKET
+        value: rag-files
+      - key: GROQ_API
+        sync: false                      # paste your Groq key
+      - key: GEMINI_API
+        sync: false                      # paste your Gemini key
+      - key: OPENROUTER_API
+        sync: false                      # paste your OpenRouter key (env requires it)
+
+databases:
+  - name: ragchatbot-db
+    plan: free

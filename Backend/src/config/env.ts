@@ -14,6 +14,9 @@ export const EnvSchema=z.object({
     MINIO_ACCESS_KEY:z.string().min(1),
     MINIO_SECRET_KEY:z.string().min(1),
     MINIO_BUCKET: z.string().default("rag-files"),
+    // NOTE: z.coerce.boolean() would turn "false" into true (non-empty string).
+    // Explicit "true"/"false" parse keeps local HTTP and R2 HTTPS both correct.
+    MINIO_USE_SSL: z.string().default("false").transform(v => v === "true"),
 })
 
 const Parsed=EnvSchema.safeParse(process.env);

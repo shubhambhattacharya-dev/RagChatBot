@@ -14,9 +14,8 @@ COPY Backend ./backend
 COPY Frontend ./Frontend
 
 WORKDIR /app/backend
-EXPOSE 3000
 
-# 3. Push the Prisma schema (no migration files — db push is the source of truth)
-#    then start the server. DATABASE_URL must be in the container env.
-#    NOTE: Prisma 7 removed --skip-generate (generation is decoupled in v7)
-CMD ["sh", "-c", "bunx prisma db push && bun src/app.ts"]
+# 3. Boot sequence: enable pgvector → push schema → start server.
+#    Managed Postgres (Render) needs explicit CREATE EXTENSION vector.
+EXPOSE 3000
+CMD ["sh", "-c", "bun scripts/init-db.ts && bunx prisma db push && bun src/app.ts"]
