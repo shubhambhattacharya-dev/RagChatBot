@@ -14,9 +14,8 @@ export async function* streamChat(
     throw new Error("Question cannot be empty.");
   }
 
-  if (contextChunks.length === 0) {
-    throw new Error("No context provided.");
-  }
+  // NOTE: empty context is allowed — the system prompt instructs the LLM
+  // to answer from general knowledge when no documents match.
 
   // Limit the amount of retrieved context sent to the LLM
   const context = contextChunks

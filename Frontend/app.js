@@ -381,6 +381,12 @@ async function streamResponse(question, typingEl) {
           content.innerHTML = renderMD(text) + '<span class="stream-cursor"></span>';
           scrollBottom();
         }
+        if (p.type === 'warning' && p.message) {
+          text += `\n\n> ⚠️ ${p.message}`;
+        }
+        if (p.type === 'error' && p.message) {
+          text += `\n\n> ❌ ${p.message}`;
+        }
         if (p.type === 'sources' && p.chunks) sources = p.chunks;
       } catch {
         /* skip malformed */
