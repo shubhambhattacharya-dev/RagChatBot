@@ -2,7 +2,10 @@
    RAG ChatBot — Frontend Application
    ============================================ */
 
-const API = 'http://localhost:3000';
+// Same-origin API on any production host (Render etc.) — no hardcoded URL.
+// Special case: Live Server on port 5500 must call the local backend at :3000
+// (CORS on the backend already allows that origin).
+const API = location.port === '5500' ? 'http://localhost:3000' : '';
 
 // ==================== STATE ====================
 const state = {
