@@ -1,6 +1,4 @@
-import { Readable } from "node:stream";
-
-import {  minio } from "../../config/minio";
+import { minio } from "../../config/minio";
 import { env } from "../../config/env";
 import prisma from "../../config/prisma";
 
@@ -16,9 +14,8 @@ export async function processDocument(
   try {
     console.log(`Processing document: ${documentId}`);
 
-    // 1. Download PDF from MinIO
-    const stream = await minio.getObject(env.MINIO_BUCKET, fileKey);
-    const buffer = await streamToBuffer(stream);
+    // 1. Download PDF from object storage (returns Buffer — S3-compatible)
+    const buffer = await minio.getObject(env.MINIO_BUCKET, fileKey);
 
     // 2. Extract text
     const parser = new PDFParse({ data: buffer });
@@ -74,20 +71,4 @@ export async function processDocument(
 
     throw error;
   }
-}
-
-function streamToBuffer(stream: Readable): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-
-    stream.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-
-    stream.on("end", () => {
-      resolve(Buffer.concat(chunks));
-    });
-
-    stream.on("error", reject);
-  });
 }

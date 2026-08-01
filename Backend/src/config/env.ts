@@ -9,14 +9,14 @@ export const EnvSchema=z.object({
     GEMINI_API:z.string().min(1),
     GROQ_API:z.string().min(1),
     REDIS_URL:z.string().default("redis://localhost:6379"),
+    // Full S3-compatible endpoint URL:
+    //   local MinIO   -> http://localhost:9000
+    //   Supabase      -> https://<ref>.supabase.co/storage/v1/s3
+    //   Cloudflare R2 -> https://<accountid>.r2.cloudflarestorage.com
     MINIO_ENDPOINT:z.string().min(1),
-    MINIO_PORT:z.coerce.number().positive().max(65535).default(9000),
     MINIO_ACCESS_KEY:z.string().min(1),
     MINIO_SECRET_KEY:z.string().min(1),
     MINIO_BUCKET: z.string().default("rag-files"),
-    // NOTE: z.coerce.boolean() would turn "false" into true (non-empty string).
-    // Explicit "true"/"false" parse keeps local HTTP and R2 HTTPS both correct.
-    MINIO_USE_SSL: z.string().default("false").transform(v => v === "true"),
 })
 
 const Parsed=EnvSchema.safeParse(process.env);

@@ -23,11 +23,9 @@ services:
       - key: REDIS_URL
         value: redis://localhost:6379   # unused — schema default kept for parity
       - key: MINIO_ENDPOINT
-        sync: false                      # set in dashboard: your R2 S3 endpoint host
-      - key: MINIO_PORT
-        value: 443
-      - key: MINIO_USE_SSL
-        value: "true"
+        sync: false                      # set in dashboard: your S3 URL
+                                         # Supabase: https://<ref>.supabase.co/storage/v1/s3
+                                         # R2: https://<accountid>.r2.cloudflarestorage.com
       - key: MINIO_ACCESS_KEY
         sync: false                      # R2 access key
       - key: MINIO_SECRET_KEY
