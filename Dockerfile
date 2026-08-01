@@ -18,4 +18,4 @@ WORKDIR /app/backend
 # 3. Boot sequence: enable pgvector → push schema → start server.
 #    Managed Postgres (Render) needs explicit CREATE EXTENSION vector.
 EXPOSE 3000
-CMD ["sh", "-c", "bun scripts/init-db.ts && bunx prisma db push && bun src/app.ts"]
+CMD ["sh", "-c", "bun run db:setup && bun src/app.ts"]

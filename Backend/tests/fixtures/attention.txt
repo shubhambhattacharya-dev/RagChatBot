@@ -1,0 +1,22 @@
+Attention Is All You Need
+Ashish Vaswani
+Google Brain
+avaswani@google.com
+Llion Jones
+Google Research
+llion@google.com
+Noam Shazeer
+Google Brain
+noam@google.com
+Niki Parmar
+Google Research
+nikip@google.com
+Abstract
+We propose the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.
+1 Introduction
+The Transformer replaces recurrence with self-attention.
+3 Model Architecture
+The encoder is composed of a stack of N = 6 identical layers.
+We employ h = 8 parallel attention layers.
+5.3 Optimizer
+We used the Adam optimizer.

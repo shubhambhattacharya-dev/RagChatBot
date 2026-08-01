@@ -10,5 +10,4 @@
  */
 export type * from './models/Document.ts'
 export type * from './models/Chunk.ts'
-export type * from './models/ChatMessage.ts'
 export type * from './commonInputTypes.ts'

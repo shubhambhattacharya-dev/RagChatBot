@@ -1,0 +1,30 @@
+[
+  {
+    "question": "What is Manish's email?",
+    "expected": "bhattacharya.manish8@gmail.com"
+  },
+  {
+    "question": "What is Manish's website?",
+    "expected": "https://manishbhattacharya.com"
+  },
+  {
+    "question": "What is Manish's phone number?",
+    "expected": "+91-9599178545"
+  },
+  {
+    "question": "Who wrote Attention Is All You Need?",
+    "expected": "Ashish Vaswani"
+  },
+  {
+    "question": "Who built DocNow?",
+    "expected": "Shubham Bhattacharya"
+  },
+  {
+    "question": "What is Shubham's email?",
+    "expected": "shubhambhattacharya107@gmail.com"
+  },
+  {
+    "question": "What is the capital of France?",
+    "expected_refusal": true
+  }
+]

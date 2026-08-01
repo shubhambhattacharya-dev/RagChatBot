@@ -199,7 +199,6 @@ export type DocumentWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Document"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Document"> | Date | string
   chunks?: Prisma.ChunkListRelationFilter
-  chatMessage?: Prisma.ChatMessageListRelationFilter
 }
 
 export type DocumentOrderByWithRelationInput = {
@@ -211,7 +210,6 @@ export type DocumentOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   chunks?: Prisma.ChunkOrderByRelationAggregateInput
-  chatMessage?: Prisma.ChatMessageOrderByRelationAggregateInput
 }
 
 export type DocumentWhereUniqueInput = Prisma.AtLeast<{
@@ -226,7 +224,6 @@ export type DocumentWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Document"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Document"> | Date | string
   chunks?: Prisma.ChunkListRelationFilter
-  chatMessage?: Prisma.ChatMessageListRelationFilter
 }, "id">
 
 export type DocumentOrderByWithAggregationInput = {
@@ -264,7 +261,6 @@ export type DocumentCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   chunks?: Prisma.ChunkCreateNestedManyWithoutDocumentInput
-  chatMessage?: Prisma.ChatMessageCreateNestedManyWithoutDocumentInput
 }
 
 export type DocumentUncheckedCreateInput = {
@@ -276,7 +272,6 @@ export type DocumentUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   chunks?: Prisma.ChunkUncheckedCreateNestedManyWithoutDocumentInput
-  chatMessage?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutDocumentInput
 }
 
 export type DocumentUpdateInput = {
@@ -288,7 +283,6 @@ export type DocumentUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chunks?: Prisma.ChunkUpdateManyWithoutDocumentNestedInput
-  chatMessage?: Prisma.ChatMessageUpdateManyWithoutDocumentNestedInput
 }
 
 export type DocumentUncheckedUpdateInput = {
@@ -300,7 +294,6 @@ export type DocumentUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chunks?: Prisma.ChunkUncheckedUpdateManyWithoutDocumentNestedInput
-  chatMessage?: Prisma.ChatMessageUncheckedUpdateManyWithoutDocumentNestedInput
 }
 
 export type DocumentCreateManyInput = {
@@ -390,20 +383,6 @@ export type DocumentUpdateOneRequiredWithoutChunksNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.DocumentUpdateToOneWithWhereWithoutChunksInput, Prisma.DocumentUpdateWithoutChunksInput>, Prisma.DocumentUncheckedUpdateWithoutChunksInput>
 }
 
-export type DocumentCreateNestedOneWithoutChatMessageInput = {
-  create?: Prisma.XOR<Prisma.DocumentCreateWithoutChatMessageInput, Prisma.DocumentUncheckedCreateWithoutChatMessageInput>
-  connectOrCreate?: Prisma.DocumentCreateOrConnectWithoutChatMessageInput
-  connect?: Prisma.DocumentWhereUniqueInput
-}
-
-export type DocumentUpdateOneRequiredWithoutChatMessageNestedInput = {
-  create?: Prisma.XOR<Prisma.DocumentCreateWithoutChatMessageInput, Prisma.DocumentUncheckedCreateWithoutChatMessageInput>
-  connectOrCreate?: Prisma.DocumentCreateOrConnectWithoutChatMessageInput
-  upsert?: Prisma.DocumentUpsertWithoutChatMessageInput
-  connect?: Prisma.DocumentWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.DocumentUpdateToOneWithWhereWithoutChatMessageInput, Prisma.DocumentUpdateWithoutChatMessageInput>, Prisma.DocumentUncheckedUpdateWithoutChatMessageInput>
-}
-
 export type DocumentCreateWithoutChunksInput = {
   id?: string
   filename: string
@@ -412,7 +391,6 @@ export type DocumentCreateWithoutChunksInput = {
   fileKey: string
   createdAt?: Date | string
   updatedAt?: Date | string
-  chatMessage?: Prisma.ChatMessageCreateNestedManyWithoutDocumentInput
 }
 
 export type DocumentUncheckedCreateWithoutChunksInput = {
@@ -423,7 +401,6 @@ export type DocumentUncheckedCreateWithoutChunksInput = {
   fileKey: string
   createdAt?: Date | string
   updatedAt?: Date | string
-  chatMessage?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutDocumentInput
 }
 
 export type DocumentCreateOrConnectWithoutChunksInput = {
@@ -450,7 +427,6 @@ export type DocumentUpdateWithoutChunksInput = {
   fileKey?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  chatMessage?: Prisma.ChatMessageUpdateManyWithoutDocumentNestedInput
 }
 
 export type DocumentUncheckedUpdateWithoutChunksInput = {
@@ -461,67 +437,6 @@ export type DocumentUncheckedUpdateWithoutChunksInput = {
   fileKey?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  chatMessage?: Prisma.ChatMessageUncheckedUpdateManyWithoutDocumentNestedInput
-}
-
-export type DocumentCreateWithoutChatMessageInput = {
-  id?: string
-  filename: string
-  mimeType: string
-  status?: string
-  fileKey: string
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  chunks?: Prisma.ChunkCreateNestedManyWithoutDocumentInput
-}
-
-export type DocumentUncheckedCreateWithoutChatMessageInput = {
-  id?: string
-  filename: string
-  mimeType: string
-  status?: string
-  fileKey: string
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  chunks?: Prisma.ChunkUncheckedCreateNestedManyWithoutDocumentInput
-}
-
-export type DocumentCreateOrConnectWithoutChatMessageInput = {
-  where: Prisma.DocumentWhereUniqueInput
-  create: Prisma.XOR<Prisma.DocumentCreateWithoutChatMessageInput, Prisma.DocumentUncheckedCreateWithoutChatMessageInput>
-}
-
-export type DocumentUpsertWithoutChatMessageInput = {
-  update: Prisma.XOR<Prisma.DocumentUpdateWithoutChatMessageInput, Prisma.DocumentUncheckedUpdateWithoutChatMessageInput>
-  create: Prisma.XOR<Prisma.DocumentCreateWithoutChatMessageInput, Prisma.DocumentUncheckedCreateWithoutChatMessageInput>
-  where?: Prisma.DocumentWhereInput
-}
-
-export type DocumentUpdateToOneWithWhereWithoutChatMessageInput = {
-  where?: Prisma.DocumentWhereInput
-  data: Prisma.XOR<Prisma.DocumentUpdateWithoutChatMessageInput, Prisma.DocumentUncheckedUpdateWithoutChatMessageInput>
-}
-
-export type DocumentUpdateWithoutChatMessageInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  filename?: Prisma.StringFieldUpdateOperationsInput | string
-  mimeType?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.StringFieldUpdateOperationsInput | string
-  fileKey?: Prisma.StringFieldUpdateOperationsInput | string
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  chunks?: Prisma.ChunkUpdateManyWithoutDocumentNestedInput
-}
-
-export type DocumentUncheckedUpdateWithoutChatMessageInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  filename?: Prisma.StringFieldUpdateOperationsInput | string
-  mimeType?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.StringFieldUpdateOperationsInput | string
-  fileKey?: Prisma.StringFieldUpdateOperationsInput | string
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  chunks?: Prisma.ChunkUncheckedUpdateManyWithoutDocumentNestedInput
 }
 
 
@@ -531,12 +446,10 @@ export type DocumentUncheckedUpdateWithoutChatMessageInput = {
 
 export type DocumentCountOutputType = {
   chunks: number
-  chatMessage: number
 }
 
 export type DocumentCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   chunks?: boolean | DocumentCountOutputTypeCountChunksArgs
-  chatMessage?: boolean | DocumentCountOutputTypeCountChatMessageArgs
 }
 
 /**
@@ -556,13 +469,6 @@ export type DocumentCountOutputTypeCountChunksArgs<ExtArgs extends runtime.Types
   where?: Prisma.ChunkWhereInput
 }
 
-/**
- * DocumentCountOutputType without action
- */
-export type DocumentCountOutputTypeCountChatMessageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.ChatMessageWhereInput
-}
-
 
 export type DocumentSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -573,7 +479,6 @@ export type DocumentSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   createdAt?: boolean
   updatedAt?: boolean
   chunks?: boolean | Prisma.Document$chunksArgs<ExtArgs>
-  chatMessage?: boolean | Prisma.Document$chatMessageArgs<ExtArgs>
   _count?: boolean | Prisma.DocumentCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["document"]>
 
@@ -610,7 +515,6 @@ export type DocumentSelectScalar = {
 export type DocumentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "filename" | "mimeType" | "status" | "fileKey" | "createdAt" | "updatedAt", ExtArgs["result"]["document"]>
 export type DocumentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   chunks?: boolean | Prisma.Document$chunksArgs<ExtArgs>
-  chatMessage?: boolean | Prisma.Document$chatMessageArgs<ExtArgs>
   _count?: boolean | Prisma.DocumentCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type DocumentIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -620,7 +524,6 @@ export type $DocumentPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
   name: "Document"
   objects: {
     chunks: Prisma.$ChunkPayload<ExtArgs>[]
-    chatMessage: Prisma.$ChatMessagePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1025,7 +928,6 @@ readonly fields: DocumentFieldRefs;
 export interface Prisma__DocumentClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   chunks<T extends Prisma.Document$chunksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Document$chunksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChunkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  chatMessage<T extends Prisma.Document$chatMessageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Document$chatMessageArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatMessagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1476,30 +1378,6 @@ export type Document$chunksArgs<ExtArgs extends runtime.Types.Extensions.Interna
   take?: number
   skip?: number
   distinct?: Prisma.ChunkScalarFieldEnum | Prisma.ChunkScalarFieldEnum[]
-}
-
-/**
- * Document.chatMessage
- */
-export type Document$chatMessageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the ChatMessage
-   */
-  select?: Prisma.ChatMessageSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the ChatMessage
-   */
-  omit?: Prisma.ChatMessageOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.ChatMessageInclude<ExtArgs> | null
-  where?: Prisma.ChatMessageWhereInput
-  orderBy?: Prisma.ChatMessageOrderByWithRelationInput | Prisma.ChatMessageOrderByWithRelationInput[]
-  cursor?: Prisma.ChatMessageWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.ChatMessageScalarFieldEnum | Prisma.ChatMessageScalarFieldEnum[]
 }
 
 /**

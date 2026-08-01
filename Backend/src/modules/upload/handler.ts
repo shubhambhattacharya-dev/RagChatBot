@@ -1,11 +1,12 @@
-import { FastifyReply, FastifyRequest } from "fastify";
-import { v4 as uuid } from "uuid";
+import type { FastifyReply, FastifyRequest } from "fastify";
+import { randomUUID } from "node:crypto";
+import { basename } from "node:path";
 
 import { env } from "../../config/env";
 import { minio } from "../../config/minio";
 import prisma from "../../config/prisma";
 
-import { processDocument } from "./processor";
+import { documentQueue } from "../../config/redis";
 
 // Whitelist: extension → expected MIME (check both — never trust just one)
 const ALLOWED_TYPES: Record<string, string> = {
@@ -16,7 +17,7 @@ const ALLOWED_TYPES: Record<string, string> = {
 };
 
 function validateFile(filename: string, mimetype: string): string | null {
-  const ext = "." + (filename.split(".").pop() || "").toLowerCase();
+  const ext = "." + (basename(filename).split(".").pop() || "").toLowerCase();
 
   if (!ALLOWED_TYPES[ext]) {
     return `File type "${ext || "(none)"}" not allowed. Use PDF, DOCX, TXT, or MD.`;
@@ -24,10 +25,29 @@ function validateFile(filename: string, mimetype: string): string | null {
 
   // Loose MIME check — some browsers send "application/octet-stream" for .docx
   const expected = ALLOWED_TYPES[ext];
-  if (mimetype && mimetype !== "application/octet-stream" && !mimetype.startsWith(expected.split("/")[0] + "/")) {
+  if (mimetype && mimetype !== "application/octet-stream" && mimetype !== expected) {
     return `File content looks like ${mimetype}, not ${expected}.`;
   }
 
+  return null;
+}
+
+function safeFilename(filename: string): string {
+  const sanitized = basename(filename)
+    .replace(/[\r\n]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/^\.+/, "");
+  return sanitized || "document";
+}
+
+function validateSignature(buffer: Buffer, extension: string): string | null {
+  if (buffer.length === 0) return "The uploaded file is empty.";
+  if (extension === ".pdf" && !buffer.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+    return "The uploaded PDF signature is invalid or the file is corrupted.";
+  }
+  if (extension === ".docx" && !buffer.subarray(0, 2).equals(Buffer.from("PK"))) {
+    return "The uploaded DOCX signature is invalid or the file is corrupted.";
+  }
   return null;
 }
 
@@ -53,10 +73,16 @@ export async function handleUpload(
 
     // 2. Convert stream → Buffer
     const buffer = await file.toBuffer();
+    const storedFilename = safeFilename(file.filename);
+    const extension = "." + (storedFilename.split(".").pop() || "").toLowerCase();
+    const signatureError = validateSignature(buffer, extension);
+    if (signatureError) {
+      return reply.status(400).send({ message: signatureError });
+    }
 
     // 3. Generate IDs
-    const documentId = uuid();
-    const fileKey = `${documentId}/${file.filename}`;
+    const documentId = randomUUID();
+    const fileKey = `${documentId}/${storedFilename}`;
 
     // 4. Upload original file to MinIO
     await minio.putObject(
@@ -73,28 +99,26 @@ export async function handleUpload(
     await prisma.document.create({
       data: {
         id: documentId,
-        filename: file.filename,
+        filename: storedFilename,
         mimeType: file.mimetype,
         fileKey,
         status: "QUEUED",
       },
     });
 
-    // 6. Start indexing in background
-    processDocument(documentId, fileKey).catch((error) => {
-      request.log.error(
-        {
-          error,
-          documentId,
-        },
-        "Document processing failed"
-      );
-    });
+    // 6. Persist work in Redis so a web-server restart cannot abandon indexing.
+    try {
+      await documentQueue.add("index-document", { documentId, fileKey }, { jobId: documentId });
+    } catch (error) {
+      await prisma.document.delete({ where: { id: documentId } }).catch(() => undefined);
+      await minio.removeObject(env.MINIO_BUCKET, fileKey).catch(() => undefined);
+      throw error;
+    }
 
     // 7. Respond immediately
     reply.status(201).send({
       documentId,
-      filename: file.filename,
+      filename: storedFilename,
       status: "QUEUED",
     });
   } catch (error) {

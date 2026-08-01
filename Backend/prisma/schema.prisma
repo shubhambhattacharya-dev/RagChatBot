@@ -24,7 +24,6 @@ model Document{
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   chunks Chunk[]
-  chatMessage ChatMessage[]
 }
 
 model Chunk{
@@ -40,15 +39,4 @@ model Chunk{
 
   @@index([documentId])
   @@index([metadata],type:Gin)
-
-}
-
-model ChatMessage{
-  id String @id @default(uuid())
-  documentId String
-  document Document @relation(fields: [documentId],references: [id])
-  question String @db.Text
-  answer String @db.Text
-  sources Json?
-  createdAt DateTime @default(now())
 }

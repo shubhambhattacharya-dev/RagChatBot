@@ -1,11 +1,17 @@
-/**
- * Boot-time DB init: enable pgvector BEFORE prisma db push.
- * Locally the pgvector docker image pre-enables it; managed Postgres
- * (Render/Neon/Supabase) does NOT — schema push would fail on vector(768).
- */
-import prisma from "../src/config/prisma";
+import { Client } from "pg";
 
-await prisma.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS vector");
-await prisma.$disconnect();
+const connectionString = process.env.DATABASE_URL;
 
-console.log("pgvector extension ready");
+if (!connectionString) {
+  throw new Error("DATABASE_URL must be set before database initialization.");
+}
+
+const client = new Client({ connectionString });
+
+try {
+  await client.connect();
+  await client.query("CREATE EXTENSION IF NOT EXISTS vector");
+  console.log("pgvector extension is ready.");
+} finally {
+  await client.end().catch(() => undefined);
+}

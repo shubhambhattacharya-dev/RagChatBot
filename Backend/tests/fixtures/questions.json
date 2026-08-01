@@ -1,0 +1,8 @@
+[
+  { "question": "Who wrote Attention Is All You Need?", "expected": "Ashish Vaswani" },
+  { "question": "What architecture is proposed?", "expected": "Transformer" },
+  { "question": "What replaces recurrence?", "expected": "self-attention" },
+  { "question": "How many encoder layers are used?", "expected": "6" },
+  { "question": "How many attention heads are used?", "expected": "8" },
+  { "question": "What optimizer is used?", "expected": "Adam" }
+]

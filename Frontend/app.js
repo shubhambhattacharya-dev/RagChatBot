@@ -5,7 +5,11 @@
 // Same-origin API on any production host (Render etc.) — no hardcoded URL.
 // Special case: Live Server on port 5500 must call the local backend at :3000
 // (CORS on the backend already allows that origin).
-const API = location.port === '5500' ? 'http://localhost:3000' : '';
+const configuredApi = typeof window.RAG_API_BASE === 'string'
+  ? window.RAG_API_BASE.replace(/\/$/, '')
+  : '';
+const localBackend = `${location.protocol === 'file:' ? 'http:' : location.protocol}//${location.hostname || 'localhost'}:3000`;
+const API = configuredApi || (location.port === '3000' ? '' : localBackend);
 
 // ==================== STATE ====================
 const state = {
@@ -379,6 +383,11 @@ async function streamResponse(question, typingEl) {
 
       try {
         const p = JSON.parse(data);
+        if (p.type === 'status' && p.message) {
+          // Observability status indicator
+          const roleEl = bubble.querySelector('.message-role');
+          if (roleEl) roleEl.textContent = `Assistant (${p.message})`;
+        }
         if (p.type === 'token' && p.content) {
           text += p.content;
           content.innerHTML = renderMD(text) + '<span class="stream-cursor"></span>';
@@ -386,9 +395,13 @@ async function streamResponse(question, typingEl) {
         }
         if (p.type === 'warning' && p.message) {
           text += `\n\n> ⚠️ ${p.message}`;
+          content.innerHTML = renderMD(text);
+          scrollBottom();
         }
         if (p.type === 'error' && p.message) {
           text += `\n\n> ❌ ${p.message}`;
+          content.innerHTML = renderMD(text);
+          scrollBottom();
         }
         if (p.type === 'sources' && p.documents) sources = p.documents;
       } catch {
@@ -396,6 +409,10 @@ async function streamResponse(question, typingEl) {
       }
     }
   }
+
+  // Restore Assistant role header
+  const roleEl = bubble.querySelector('.message-role');
+  if (roleEl) roleEl.textContent = 'Assistant';
 
   // Final render + source citation chips (document names from retrieval)
   const html = renderMD(text);
@@ -454,10 +471,10 @@ function addHistoryItem(question) {
   if (empty) empty.remove();
 
   const item = document.createElement('div');
-  item.className = 'file-item';
+  item.className = 'history-item';
   item.style.cursor = 'pointer';
   item.innerHTML = `
-    <span style="font-size:12px;">💬</span>
+    <span style="font-size:12px; flex-shrink: 0;">💬</span>
     <span class="file-name" style="font-size:11px;">${escapeHTML(question.slice(0, 50))}${question.length > 50 ? '…' : ''}</span>
   `;
   item.addEventListener('click', () => {
@@ -512,19 +529,32 @@ function renderMD(text) {
   let html = escapeHTML(text);
 
   // Code blocks
-  html = html.replace(
-    /```(\w*)\n([\s\S]*?)```/g,
-    '<pre><code>$2</code></pre>'
-  );
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+
+  // Blockquotes (> text)
+  html = html.replace(/^&gt;\s*(.+)$/gm, '<blockquote>$1</blockquote>');
 
   // Inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-  // Bold
+  // Bold & Italic
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-  // Italic
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Headings
+  html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+
+  // Numbered list items (e.g. 1. Item)
+  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="num-item">$1</li>');
+
+  // Bullet list items (e.g. - Item or * Item)
+  html = html.replace(/^[-*]\s+(.+)$/gm, '<li class="bullet-item">$1</li>');
+
+  // Wrap contiguous <li> tags into <ol> or <ul> lists
+  html = html.replace(/(<li class="num-item">[\s\S]*?<\/li>\n?)+/g, (m) => `<ol>${m}</ol>`);
+  html = html.replace(/(<li class="bullet-item">[\s\S]*?<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
 
   // Links
   html = html.replace(
@@ -538,6 +568,8 @@ function renderMD(text) {
   html = '<p>' + html + '</p>';
   html = html.replace(/<p><br>/g, '<p>');
   html = html.replace(/<p><\/p>/g, '');
+  html = html.replace(/<p>(<h[123]>.*?<\/h[123]>)<\/p>/g, '$1');
+  html = html.replace(/<p>(<(ol|ul|blockquote|pre)>[\s\S]*?<\/\2>)<\/p>/g, '$1');
 
   return html;
 }

@@ -1,4 +1,4 @@
-import { FastifyReply } from "fastify";
+import type { FastifyReply } from "fastify";
 
 export function setupSSE(reply: FastifyReply) {
   const origin = reply.request.headers.origin;

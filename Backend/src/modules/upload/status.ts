@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import prisma from "../../config/prisma";
 import { minio } from "../../config/minio";
 import { env } from "../../config/env";

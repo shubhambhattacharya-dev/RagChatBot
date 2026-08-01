@@ -27,8 +27,3 @@ export type Document = Prisma.DocumentModel
  * 
  */
 export type Chunk = Prisma.ChunkModel
-/**
- * Model ChatMessage
- * 
- */
-export type ChatMessage = Prisma.ChatMessageModel

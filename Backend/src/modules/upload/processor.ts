@@ -2,10 +2,9 @@ import { minio } from "../../config/minio";
 import { env } from "../../config/env";
 import prisma from "../../config/prisma";
 
-import { chunkText } from "../../utils/chunking";
+import { chunkText, detectDocumentOwner, enrichChunks, getChunkMetadata } from "../../utils/chunking";
 import { embedText } from "../../provider/embedding/gemini";
-
-const {PDFParse } = await import("pdf-parse");
+import { extractText } from "../../services/document/extract";
 
 export async function processDocument(
   documentId: string,
@@ -15,11 +14,19 @@ export async function processDocument(
     console.log(`Processing document: ${documentId}`);
 
     // 1. Download PDF from object storage (returns Buffer — S3-compatible)
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: { filename: true, mimeType: true },
+    });
+    if (!document) return;
+
+    await prisma.document.update({ where: { id: documentId }, data: { status: "PROCESSING" } });
+    await prisma.chunk.deleteMany({ where: { documentId } });
+
     const buffer = await minio.getObject(env.MINIO_BUCKET, fileKey);
 
     // 2. Extract text
-    const parser = new PDFParse({ data: buffer });
-    const { text } = await parser.getText();
+    const text = await extractText(buffer, document.mimeType, document.filename);
 
     if (!text.trim()) {
       throw new Error("No text extracted from document.");
@@ -32,15 +39,26 @@ export async function processDocument(
       throw new Error("No chunks generated.");
     }
 
+    // 3b. Enrich with metadata: Document name + Section labels + labeled
+    // contact fields (Email:/Phone:/Website:). The embedding now contains
+    // the WORDS "email", "phone", "website" next to the values — so
+    // "what is the email?" matches the chunk semantically (raw values like
+    // "bhattacharya.manish8@gmail.com" alone embed poorly against queries).
+    const filename = document.filename;
+
+    const enriched = enrichChunks(chunks, filename);
+    const owner = detectDocumentOwner(chunks);
+
     // 4. Generate embeddings and store them
        // 4. Generate embeddings and store them (raw SQL — Prisma can't write vector columns)
-    for (const [index, chunk] of chunks.entries()) {
-      const embedding = await embedText(chunk.content);
+    for (const [index, chunk] of enriched.entries()) {
+      const embedding = await embedText(chunk.content, "RETRIEVAL_DOCUMENT");
       const vector = `[${embedding.join(",")}]`;  // pgvector format
+      const metadata = JSON.stringify(getChunkMetadata(chunks[index]!, filename, owner));
 
       await prisma.$executeRaw`
-        INSERT INTO "Chunk" ("id", "documentId", "chunkIndex", "content", "embedding", "createdAT")
-        VALUES (gen_random_uuid(), ${documentId}, ${index}, ${chunk.content}, ${vector}::vector, NOW())
+        INSERT INTO "Chunk" ("id", "documentId", "chunkIndex", "content", "embedding", "metadata", "createdAT")
+        VALUES (gen_random_uuid(), ${documentId}, ${index}, ${chunk.content}, ${vector}::vector, ${metadata}::jsonb, NOW())
       `;
     }
 
@@ -60,14 +78,10 @@ export async function processDocument(
   } catch (error) {
     console.error(`Failed to process document ${documentId}:`, error);
 
-    await prisma.document.update({
-      where: {
-        id: documentId,
-      },
-      data: {
-        status: "FAILED",
-      },
-    });
+    await prisma.chunk.deleteMany({ where: { documentId } });
+    await prisma.document
+      .update({ where: { id: documentId }, data: { status: "FAILED" } })
+      .catch(() => undefined);
 
     throw error;
   }

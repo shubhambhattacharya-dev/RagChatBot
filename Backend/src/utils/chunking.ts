@@ -39,11 +39,7 @@ function splitByNumberedHeadings(text: string): string[] {
 
   const sections: string[] = [];
 
-  // Front matter (title, authors, abstract...) before the first heading
-  // MUST be kept — dropping it makes metadata questions unanswerable.
-  // Split it at the Abstract line so the title+authors block stays its own
-  // atomic chunk: a mixed title+authors+abstract chunk embeds like the
-  // abstract, so "who are the authors?" never matches it.
+  
   const preamble = lines.slice(0, headingIndexes[0]).join("\n").trim();
   if (preamble) {
     const absMatch = preamble.match(/\n\s*(Abstract|ABSTRACT|Summary|SUMMARY)\s*\n/);
@@ -124,9 +120,7 @@ function process(
     return;
   }
 
-  // Line (fallback for PDFs where blank lines were lost — e.g. resumes:
-  // "Name\nemail | phone | url\nEXPERIENCE\n..." would otherwise stay one
-  // giant mixed chunk and the contact line would never retrieve).
+
   const lines = splitByLine(text);
 
   if (lines.length > 1) {
@@ -219,7 +213,19 @@ function addOverlap(
       };
     }
 
-    const previousWords = chunks[index - 1].split(/\s+/);
+    
+    const previous = chunks[index - 1];
+    if (!previous) {
+      return { index, content: chunk };
+    }
+    if (looksLikeContact(previous)) {
+      return {
+        index,
+        content: chunk,
+      };
+    }
+
+    const previousWords = previous.split(/\s+/);
     const overlap = previousWords
       .slice(-overlapWords)
       .join(" ");
@@ -231,12 +237,115 @@ function addOverlap(
   });
 }
 
-/* -------------------- Main -------------------- */
+
+const CONTACT_LINE_RE = /(?:[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s-]{9,}|https?:\/\/\S+|\bwww\.\S+)/i;
+
+function looksLikeContact(text: string): boolean {
+  return CONTACT_LINE_RE.test(text);
+}
+
+
+function labelContactFields(text: string): string {
+  const emails = [...text.matchAll(/[\w.+-]+@[\w-]+\.[\w.]+/gi)].map((match) => match[0]);
+  const phones = [...text.matchAll(/\+?\d[\d\s-]{9,}/g)].map((match) => match[0].trim());
+  const websites = [...text.matchAll(/https?:\/\/[^\s|]+/gi)].map((match) => match[0]);
+
+  return [...new Set([
+    ...emails.map((email) => `Email: ${email}`),
+    ...phones.map((phone) => `Phone: ${phone}`),
+    ...websites.map((website) => `Website: ${website}`),
+  ])].join("\n");
+}
+
+// Detect the section a chunk belongs to (ALL-CAPS resume headers like
+// "EXPERIENCE", or numbered paper headings like "3. Methodology").
+function detectSection(content: string): string | null {
+  const firstLine = content.split("\n")[0]?.trim() ?? "";
+  if (/^[A-Z][A-Z\s&/()-]{2,}$/.test(firstLine) && firstLine.length <= 40) {
+    return firstLine;
+  }
+  const heading = content.match(/^\d+(?:\.\d+)*\s+[A-Z][^:\n]{0,60}/);
+  if (heading) return heading[0];
+  return null;
+}
+
+// Wrap each chunk with document + section metadata and label contact fields.
+// The embedding now contains the words "Document", "Section", "Email",
+// "Phone", "Website" — so "what is the email?" matches "Email:" directly.
+// (Fixes the biggest RAG mistake: embedding raw values with zero context.)
+export function enrichChunks(
+  chunks: Chunk[],
+  documentName: string
+): Chunk[] {
+  // Detect the document OWNER (a resume's first line is a person's name,
+  // e.g. "Shubham Bhattacharya"). Two-word capitalized pattern only — a
+  // paper title like "Attention Is All You Need" fails this check, so
+  // papers never get a bogus owner. Prepend "Owner:" to EVERY chunk so
+  // multi-hop questions ("who built DocNow?") find the name IN the chunk,
+  // not across chunks — no inference needed, grounding stays strict.
+  const owner = detectOwner(chunks[0]?.content ?? "");
+
+  return chunks.map((chunk) => {
+    const content = chunk.content;
+    const ownerLine = owner ? `Owner: ${owner}\n` : "";
+
+    // Contact chunk (email/phone/url present): label it explicitly
+    if (looksLikeContact(content)) {
+      const labeled = labelContactFields(content);
+      return {
+        index: chunk.index,
+        // Labels improve exact-value retrieval, but the original chunk must
+        // remain intact. A paper's author block can contain many emails; the
+        // previous implementation silently discarded all authors but the first.
+        content: `Document: ${documentName}\n${ownerLine}Metadata: Contact details detected\n\n${labeled}\n\nContent:\n${content}`,
+      };
+    }
+
+    // Non-contact chunk: prepend document + detected section
+    const section = detectSection(content);
+    const sectionLabel = section
+      ? `Section: ${section}\n\n`
+      : "";
+
+    return {
+      index: chunk.index,
+      content: `Document: ${documentName}\n${ownerLine}${sectionLabel}${content}`,
+    };
+  });
+}
+
+// Two-word capitalized name on the first line = resume owner.
+// "Shubham Bhattacharya" ✓   "Attention Is All You Need" ✗ (4 words)
+// "Manish Bhattacharya" ✓
+function detectOwner(content: string): string | null {
+  const firstLine = content.split("\n")[0]?.trim() ?? "";
+  const match = firstLine.match(/^([A-Z][a-zA-Z]+)\s+([A-Z][a-zA-Z-]+)$/);
+  return match ? `${match[1]} ${match[2]}` : null;
+}
+
+/** Structured retrieval metadata stored with every chunk during indexing. */
+export function getChunkMetadata(
+  rawChunk: Chunk,
+  documentName: string,
+  owner: string | null
+): Record<string, string | number | null> {
+  return {
+    filename: documentName,
+    chunkIndex: rawChunk.index,
+    owner,
+    section: detectSection(rawChunk.content),
+    documentType: owner ? "resume" : "document",
+  };
+}
+
+export function detectDocumentOwner(chunks: Chunk[]): string | null {
+  return detectOwner(chunks[0]?.content ?? "");
+}
 
 export function chunkText(
   text: string,
   maxTokens = 512,
-  overlapWords = 20
+  overlapWords = 0
 ): Chunk[] {
   const chunks: string[] = [];
 

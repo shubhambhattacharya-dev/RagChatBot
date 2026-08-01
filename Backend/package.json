@@ -5,11 +5,22 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/node": "^26.1.2",
     "jest": "^30.4.2",
-    "prisma": "^7.9.1"
+    "prisma": "^7.9.1",
+    "vitest": "^4.1.10"
   },
   "scripts": {
-    "dev": "bun --watch src/app.ts"
+    "dev": "bun --watch src/app.ts",
+    "start": "bun src/app.ts",
+    "typecheck": "tsc --noEmit",
+    "db:setup": "bun scripts/init-db.ts && bunx prisma db push && bun scripts/ensure-vector-index.ts",
+    "reindex": "bun scripts/reindex.ts",
+    "test": "bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat",
+    "test:integration": "RUN_INTEGRATION_TESTS=1 bun test tests/database",
+    "test:retrieval": "RUN_LIVE_RETRIEVAL_TESTS=1 bun test tests/retrieval",
+    "test:llm": "RUN_LIVE_LLM_TESTS=1 bun test tests/llm",
+    "test:e2e": "RUN_E2E_TESTS=1 bun test tests/e2e"
   },
   "peerDependencies": {
     "typescript": "^5"
