@@ -9,7 +9,7 @@ interface ChatBody {
   documentId?: string;
 }
 
-const TOP_K = 5;
+const TOP_K = 8;
 // pgvector cosine distance (`<=>`): 0 = identical, ~1 = orthogonal.
 // Chunks farther than this are NOT evidence — the LLM is never called with
 // weak context, so the answer cannot drift into model memory (anti-hallucination).

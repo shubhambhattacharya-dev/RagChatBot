@@ -22,6 +22,14 @@ function splitByNumberedHeadings(text: string): string[] {
     // (Long lines starting with digits are prose, e.g. "28.4 BLEU ...")
     if (/^\d+(?:\.\d+)*\s+[A-Z]/.test(t) && t.length <= 60) {
       headingIndexes.push(index);
+      return;
+    }
+    // Resumes/cover letters: ALL-CAPS section headers with no number
+    // ("EXPERIENCE", "EDUCATION", "SKILLS"...) — without this the contact
+    // line (name/email/phone/url) gets glued into one giant chunk and
+    // "what is the email?" can never retrieve it.
+    if (/^[A-Z][A-Z\s&/()-]{2,}$/.test(t) && t.length <= 40) {
+      headingIndexes.push(index);
     }
   });
 
@@ -69,6 +77,13 @@ function splitByParagraph(text: string): string[] {
     .filter(Boolean);
 }
 
+function splitByLine(text: string): string[] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
 function splitBySentence(text: string): string[] {
   return text
     .split(/(?<=[.!?])\s+/)
@@ -106,6 +121,34 @@ function process(
     for (const paragraph of paragraphs) {
       process(paragraph, maxTokens, result);
     }
+    return;
+  }
+
+  // Line (fallback for PDFs where blank lines were lost — e.g. resumes:
+  // "Name\nemail | phone | url\nEXPERIENCE\n..." would otherwise stay one
+  // giant mixed chunk and the contact line would never retrieve).
+  const lines = splitByLine(text);
+
+  if (lines.length > 1) {
+    let current = "";
+
+    for (const line of lines) {
+      const candidate = current ? `${current}\n${line}` : line;
+
+      if (tokenCount(candidate) <= maxTokens) {
+        current = candidate;
+      } else {
+        if (current) {
+          process(current, maxTokens, result);
+        }
+        current = line;
+      }
+    }
+
+    if (current) {
+      process(current, maxTokens, result);
+    }
+
     return;
   }
 

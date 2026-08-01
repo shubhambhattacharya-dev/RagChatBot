@@ -14,6 +14,10 @@ const openrouter = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
 });
 
+// Matches TOP_K in chat/routes.ts — every chunk passed the similarity gate
+// is evidence, so the LLM should see all of them (never fewer silently).
+const MAX_CONTEXT_CHUNKS = 8;
+
 const SYSTEM_PROMPT = `You are a document-grounded assistant for a Retrieval-Augmented Generation (RAG) system.
 
 GROUNDING RULES (strict):
@@ -52,9 +56,12 @@ export async function* streamChat(
     throw new Error("No relevant context found.");
   }
 
-  // Limit the amount of retrieved context sent to the LLM
+  // Limit the amount of retrieved context sent to the LLM.
+  // Do NOT hard-code a count here: routes.ts already gates retrieval with
+  // TOP_K + MAX_DISTANCE, so every chunk passed in is evidence. Slicing to a
+  // fixed 5 silently drops valid chunks (e.g. an email at position 6-7).
   const context = contextChunks
-    .slice(0, 5)
+    .slice(0, MAX_CONTEXT_CHUNKS)
     .map((chunk, index) => `[${index + 1}] ${chunk}`)
     .join("\n\n");
 
