@@ -390,16 +390,29 @@ async function streamResponse(question, typingEl) {
         if (p.type === 'error' && p.message) {
           text += `\n\n> ❌ ${p.message}`;
         }
-        if (p.type === 'sources' && p.chunks) sources = p.chunks;
+        if (p.type === 'sources' && p.documents) sources = p.documents;
       } catch {
         /* skip malformed */
       }
     }
   }
 
-  // Final render (sources hidden — retrieval happens under the hood)
+  // Final render + source citation chips (document names from retrieval)
   const html = renderMD(text);
   content.innerHTML = html;
+
+  if (sources.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sources-wrap';
+    wrap.innerHTML = sources
+      .map(
+        (name) =>
+          `<span class="source-chip"><span class="source-num">📄</span>${escapeHTML(name)}</span>`
+      )
+      .join('');
+    bubble.appendChild(wrap);
+    scrollBottom();
+  }
 
   state.messages.push({ role: 'user', content: question });
   state.messages.push({ role: 'assistant', content: text, sources });

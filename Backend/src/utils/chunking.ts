@@ -15,7 +15,12 @@ function splitByNumberedHeadings(text: string): string[] {
   const headingIndexes: number[] = [];
 
   lines.forEach((line, index) => {
-    if (/^\d+(?:\.\d+)*\s+.+/.test(line.trim())) {
+    const t = line.trim();
+    // Skip page markers like "9 of 11" — they are not headings
+    if (/^\d+\s+of\s+\d+$/.test(t)) return;
+    // Headings: numbered, start with a capital letter, short line.
+    // (Long lines starting with digits are prose, e.g. "28.4 BLEU ...")
+    if (/^\d+(?:\.\d+)*\s+[A-Z]/.test(t) && t.length <= 60) {
       headingIndexes.push(index);
     }
   });
@@ -25,6 +30,24 @@ function splitByNumberedHeadings(text: string): string[] {
   }
 
   const sections: string[] = [];
+
+  // Front matter (title, authors, abstract...) before the first heading
+  // MUST be kept — dropping it makes metadata questions unanswerable.
+  // Split it at the Abstract line so the title+authors block stays its own
+  // atomic chunk: a mixed title+authors+abstract chunk embeds like the
+  // abstract, so "who are the authors?" never matches it.
+  const preamble = lines.slice(0, headingIndexes[0]).join("\n").trim();
+  if (preamble) {
+    const absMatch = preamble.match(/\n\s*(Abstract|ABSTRACT|Summary|SUMMARY)\s*\n/);
+    if (absMatch?.index) {
+      const metadata = preamble.slice(0, absMatch.index).trim();
+      const abstract = preamble.slice(absMatch.index).trim();
+      if (metadata) sections.push(metadata);
+      if (abstract) sections.push(abstract);
+    } else {
+      sections.push(preamble);
+    }
+  }
 
   for (let i = 0; i < headingIndexes.length; i++) {
     const start = headingIndexes[i];

@@ -10,6 +10,10 @@ interface ChatBody {
 }
 
 const TOP_K = 5;
+// pgvector cosine distance (`<=>`): 0 = identical, ~1 = orthogonal.
+// Chunks farther than this are NOT evidence — the LLM is never called with
+// weak context, so the answer cannot drift into model memory (anti-hallucination).
+const MAX_DISTANCE = 0.5;
 
 async function handleChat(question: string, reply: FastifyReply, documentId?: string) {
   setupSSE(reply);
@@ -21,33 +25,41 @@ async function handleChat(question: string, reply: FastifyReply, documentId?: st
     // Convert embedding to pgvector format
     const vector = `[${queryEmbedding.join(",")}]`;
 
-    // Retrieve the most relevant chunks — scoped to one document when selected
-    const chunks = documentId
-      ? await prisma.$queryRaw<{ content: string }[]>`
-          SELECT content
-          FROM "Chunk"
-          WHERE "documentId" = ${documentId}
-          ORDER BY embedding <=> ${vector}::vector
+    // Retrieve the most relevant chunks — scoped to one document when selected.
+    // Join the Document filename so the UI can cite the actual source file.
+    const rows = documentId
+      ? await prisma.$queryRaw<{ content: string; filename: string; distance: number }[]>`
+          SELECT c.content, d.filename, c.embedding <=> ${vector}::vector AS distance
+          FROM "Chunk" c
+          JOIN "Document" d ON d.id = c."documentId"
+          WHERE c."documentId" = ${documentId}
+          ORDER BY c.embedding <=> ${vector}::vector
           LIMIT ${TOP_K}
         `
-      : await prisma.$queryRaw<{ content: string }[]>`
-          SELECT content
-          FROM "Chunk"
-          ORDER BY embedding <=> ${vector}::vector
+      : await prisma.$queryRaw<{ content: string; filename: string; distance: number }[]>`
+          SELECT c.content, d.filename, c.embedding <=> ${vector}::vector AS distance
+          FROM "Chunk" c
+          JOIN "Document" d ON d.id = c."documentId"
+          ORDER BY c.embedding <=> ${vector}::vector
           LIMIT ${TOP_K}
         `;
 
-    const contextChunks = chunks.map((chunk) => chunk.content);
+    // Only chunks close enough to the question count as retrieved evidence
+    const relevant = rows.filter((row) => row.distance <= MAX_DISTANCE);
+    const contextChunks = relevant.map((row) => row.content);
+    const sourceDocs = [...new Map(relevant.map((row) => [row.filename, row.filename])).keys()];
 
-    // Optional: notify client if nothing relevant was found
+    // Grounded-only: no relevant context -> refuse. Never answer from LLM memory.
     if (contextChunks.length === 0) {
       sendSSE(reply, {
         type: "warning",
-        message: "No relevant documents were found.",
+        message:
+          "I couldn't find this in your documents. Ask something covered by an uploaded file.",
       });
+      return;
     }
 
-    // Stream LLM response token-by-token
+    // Stream LLM response token-by-token — grounded in the retrieved chunks only
     for await (const token of streamChat(question, contextChunks)) {
       sendSSE(reply, {
         type: "token",
@@ -55,10 +67,11 @@ async function handleChat(question: string, reply: FastifyReply, documentId?: st
       });
     }
 
-    // Send retrieved sources
+    // Send retrieved sources (document names for citation chips)
     sendSSE(reply, {
       type: "sources",
       count: contextChunks.length,
+      documents: sourceDocs,
       chunks: contextChunks,
     });
   } catch (error) {
