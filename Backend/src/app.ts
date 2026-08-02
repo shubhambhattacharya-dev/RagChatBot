@@ -11,6 +11,23 @@ import { chatRoutes } from "./modules/chat/routes";
 import { createWorker, documentQueue, redis } from "./config/redis";
 import prisma from "./config/prisma";
 import { processDocument } from "./modules/upload/processor";
+import { withTimeout } from "./utils/timeout";
+
+/** A slow dependency must never hang /health — the UI status dot and Render's
+ *  own health checks both depend on it answering quickly. */
+const HEALTH_CHECK_TIMEOUT_MS = 3_000;
+
+async function dependencyCheck(
+  label: string,
+  probe: () => Promise<unknown>
+): Promise<[string, string]> {
+  try {
+    await withTimeout(probe(), HEALTH_CHECK_TIMEOUT_MS);
+    return [label, "ok"];
+  } catch (err: any) {
+    return [label, `error: ${err?.message || err}`];
+  }
+}
 
 export async function buildApp(){
     assertRuntimeConfig();
@@ -42,24 +59,13 @@ export async function buildApp(){
 
     // ── Health check ──────────────────────────────────────────────────
     // Verifies DB + Redis are reachable (not just "server is up").
+    // Each probe races a timeout — a dead dependency reports fast instead
+    // of hanging the endpoint (frontend aborts at 4s and Render probes too).
     app.get("/health", async (_request, reply) => {
-      const checks: Record<string, string> = {};
-
-      // Postgres via Prisma
-      try {
-        await prisma.$queryRaw`SELECT 1`;
-        checks.postgres = "ok";
-      } catch (err: any) {
-        checks.postgres = `error: ${err?.message || err}`;
-      }
-
-      // Redis
-      try {
-        await redis.ping();
-        checks.redis = "ok";
-      } catch (err: any) {
-        checks.redis = `error: ${err?.message || err}`;
-      }
+      const checks: Record<string, string> = Object.fromEntries([
+        await dependencyCheck("postgres", () => prisma.$queryRaw`SELECT 1`),
+        await dependencyCheck("redis", () => redis.ping()),
+      ]);
 
       const healthy = Object.values(checks).every((v) => v === "ok");
       const status = healthy ? 200 : 503;

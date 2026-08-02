@@ -2,9 +2,21 @@ import {Redis} from "ioredis"
 import {Queue, Worker} from 'bullmq'
 import {env} from './env'
 
-export const redis= new Redis(env.REDIS_URL,{
-    maxRetriesPerRequest:null
-})
+/** Build an ioredis client. Managed Redis (Upstash, Redis Cloud) requires
+ *  TLS even on the `redis://` scheme, so enable it automatically for
+ *  Upstash hosts and for explicit `rediss://` URLs.
+ *  Local/dev Redis (redis://localhost:6379) stays plaintext. */
+export function createRedis(url: string): Redis {
+  const parsed = new URL(url);
+  const needsTls =
+    parsed.protocol === "rediss:" || parsed.hostname.endsWith("upstash.io");
+  return new Redis(url.replace(/^rediss:/, "redis:"), {
+    maxRetriesPerRequest: null,
+    ...(needsTls ? { tls: {} } : {}),
+  });
+}
+
+export const redis = createRedis(env.REDIS_URL)
 
 export const documentQueue=new Queue("document-processing",{
     connection:redis,
