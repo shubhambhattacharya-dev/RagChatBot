@@ -9,7 +9,7 @@ const configuredApi = typeof window.RAG_API_BASE === 'string'
   ? window.RAG_API_BASE.replace(/\/$/, '')
   : '';
 const localBackend = `${location.protocol === 'file:' ? 'http:' : location.protocol}//${location.hostname || 'localhost'}:3000`;
-const API = configuredApi || (location.port === '3000' ? '' : localBackend);
+const API = configuredApi || (location.port === '5500' ? localBackend : '');
 
 // ==================== STATE ====================
 const state = {
