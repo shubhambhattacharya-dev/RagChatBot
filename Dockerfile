@@ -15,7 +15,15 @@ COPY Frontend ./Frontend
 
 WORKDIR /app/backend
 
-# 3. Boot sequence: enable pgvector → push schema → start server.
+# 3. Redis for BullMQ — runs IN the container.
+#    Free-tier friendly: no metered external Redis (Upstash's 500k req/month
+#    quota is burned by BullMQ's blocking-wait polling). Memory-only, so a
+#    restart loses the queue — src/app.ts re-queues stranded documents on boot.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends redis-server \
+ && rm -rf /var/lib/apt/lists/*
+
+# 4. Boot sequence: start Redis → enable pgvector → push schema → start server.
 #    Managed Postgres (Render) needs explicit CREATE EXTENSION vector.
 EXPOSE 3000
-CMD ["sh", "-c", "bun run db:setup && bun src/app.ts"]
+CMD ["sh", "-c", "redis-server --daemonize yes --save '' --appendonly no && bun run db:setup && bun src/app.ts"]

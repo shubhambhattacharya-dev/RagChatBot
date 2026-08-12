@@ -23,7 +23,11 @@ export const documentQueue=new Queue("document-processing",{
     defaultJobOptions:{
         attempts:3,
         backoff:{type:"exponential",delay:2000},
-
+        // Don't keep completed/failed job records: in-container Redis is
+        // ephemeral anyway, and stale records would make a boot re-queue
+        // with the same jobId a silent no-op (stranding the document).
+        removeOnComplete:true,
+        removeOnFail:true,
     }
 })
 

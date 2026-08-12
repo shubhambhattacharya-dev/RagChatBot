@@ -20,9 +20,11 @@ services:
       - key: DATABASE_URL
         sync: false                      # paste Supabase connection string (URI)
       - key: REDIS_URL
-        sync: false                      # paste Upstash TCP URL (redis://default:...@<db>.upstash.io:6379)
-                                         # Upstash free tier: no card, 10k cmds/day. TLS auto-enabled in code.
-                                         # BullMQ needs this for the upload→index queue — do NOT leave unset.
+        value: redis://localhost:6379   # in-container Redis, started by the Dockerfile CMD.
+                                        # IMPORTANT: remove any external REDIS_URL override
+                                        # (e.g. Upstash) from the Render dashboard — BullMQ's
+                                        # worker polling burns Upstash's free 500k req/month
+                                        # quota in days (ERR max requests limit exceeded).
       - key: MINIO_ENDPOINT
         sync: false                      # set in dashboard: your S3 URL
                                          # Supabase: https://<ref>.supabase.co/storage/v1/s3

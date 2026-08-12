@@ -2,9 +2,9 @@
 
 Deploy the full stack (backend + frontend, one origin) to Render free tier,
 with Supabase (Postgres + pgvector + S3-compatible storage) as the data layer,
-Upstash Redis for the upload→index queue, and UptimeRobot as the keep-alive pinger.
+Redis (in-container) for the upload→index queue, and UptimeRobot as the keep-alive pinger.
 
-**Total time:** ~35 minutes. **Cost:** ₹0. **Card:** none required.
+**Total time:** ~30 minutes. **Cost:** ₹0. **Card:** none required.
 
 ---
 
@@ -15,8 +15,8 @@ Upstash Redis for the upload→index queue, and UptimeRobot as the keep-alive pi
 │ Render (free tier)                                           │
 │  ┌──────────────────────────────────┐                        │
 │  │ Web Service                      │                        │
-│  │ backend + frontend               │   Dockerfile image     │
-│  │ (one origin → zero CORS)         │                        │
+│  │ backend + frontend + Redis       │   Dockerfile image     │
+│  │ (one origin → zero CORS)         │   (Redis in-container) │
 │  └──────┬───────────┬───────────────┘                        │
 └─────────┼───────────┼────────────────────────────────────────┘
           │           │
@@ -27,15 +27,6 @@ Upstash Redis for the upload→index queue, and UptimeRobot as the keep-alive pi
  │ + pgvector           │    │ (S3-compatible)      │
  │ (never expires)      │    │ bucket: rag-files    │
  └──────────────────────┘    └──────────────────────┘
-          │
-          │ REDIS_URL (TLS, TCP 6379)
-          ▼
- ┌──────────────────────┐
- │ Upstash Redis        │
- │ free tier            │
- │ 10k cmds/day         │
- │ no card, no expiry   │
- └──────────────────────┘
 
  UptimeRobot (free)  ← HTTP pings /health every 5 min
                         keeps Render awake + monitors status
@@ -44,9 +35,12 @@ Upstash Redis for the upload→index queue, and UptimeRobot as the keep-alive pi
 > **Why Supabase?** Free, no card, nothing expires. Postgres + pgvector + S3
 > in one account. Render Postgres expires after 30 days.
 >
-> **Why Upstash?** Free, no card, 10k commands/day is more than enough for
-> portfolio uploads. BullMQ (the document-indexing queue) requires Redis —
-> without it, uploads hang forever and `/health` never responds.
+> **Why in-container Redis?** Free, no card, and no metered quota to exhaust.
+> BullMQ (the document-indexing queue) requires Redis — without it, uploads
+> hang forever. External serverless Redis (Upstash free tier) burns its
+> 500k requests/month quota in days because BullMQ polls continuously. The
+> container's own Redis costs nothing. It's memory-only, so on restart the
+> app automatically re-queues any QUEUED/PROCESSING documents.
 
 ---
 
@@ -75,20 +69,15 @@ Upstash Redis for the upload→index queue, and UptimeRobot as the keep-alive pi
 
 ---
 
-## STEP 2 — Upstash Redis (5 min)
+## STEP 2 — Redis: nothing to set up 🎉
 
-1. Go to https://upstash.com → **Sign up** (GitHub or Google — no card)
-2. Dashboard → **Create database**
-   - Name: `ragchatbot`
-   - Region: **Mumbai** (or closest to you)
-   - Type: **Regional** (free tier — leave defaults)
-3. Click **Create** → wait ~10 seconds
-4. Go to the **Redis** tab → **Connect** → copy the **TCP URL**
-   - Format: `redis://default:...@<db>.upstash.io:6379`
-   - ⚠️ Copy the **TCP URL**, NOT the REST URL — ioredis needs TCP
+The Dockerfile installs Redis **inside** the container and starts it before the
+app boots. `REDIS_URL` is already `redis://localhost:6379` in `render.yaml` —
+**do not** add an external Redis (Upstash) override in the Render dashboard:
+BullMQ's worker polling exhausts Upstash's free 500k requests/month quota in
+days, which breaks uploads with `ERR max requests limit exceeded`.
 
-> ✅ Step 2 done when: you have a `redis://default:...@...upstash.io:6379`
-> string in your notepad.
+> ✅ Step 2 done when: nothing to do — skip straight to Step 3.
 
 ---
 
@@ -107,7 +96,7 @@ Upstash Redis for the upload→index queue, and UptimeRobot as the keep-alive pi
 | Key | Value |
 |:----|:------|
 | `DATABASE_URL` | your Supabase `postgresql://...` URI |
-| `REDIS_URL` | your Upstash `redis://default:...@...upstash.io:6379` |
+| `REDIS_URL` | **leave as `redis://localhost:6379`** — Redis runs in-container (started by the Dockerfile). Remove any external/Upstash override |
 | `MINIO_ENDPOINT` | `https://<projectref>.supabase.co/storage/v1/s3` |
 | `MINIO_ACCESS_KEY` | (Supabase S3 Access Key ID) |
 | `MINIO_SECRET_KEY` | (Supabase S3 Secret Access Key) |
@@ -128,7 +117,7 @@ Upstash Redis for the upload→index queue, and UptimeRobot as the keep-alive pi
 
 ---
 
-## STEP 4 — Keep it awake with UptimeRobot (3 min)
+## STEP 3 — Keep it awake with UptimeRobot (3 min)
 
 Render free tier sleeps after 15 min idle. UptimeRobot pings every 5 min → never sleeps.
 
@@ -139,11 +128,11 @@ Render free tier sleeps after 15 min idle. UptimeRobot pings every 5 min → nev
 5. Monitoring interval: **5 minutes**
 6. **Create Monitor**
 
-> ✅ Step 4 done when: the monitor shows **Up (green)** after a few minutes.
+> ✅ Step 3 done when: the monitor shows **Up (green)** after a few minutes.
 
 ---
 
-## STEP 5 — End-to-end test (5 min)
+## STEP 4 — End-to-end test (5 min)
 
 Open `https://<name>.onrender.com` in a browser:
 
@@ -161,9 +150,10 @@ Open `https://<name>.onrender.com` in a browser:
 |:--------|:-------------|:----|
 | Service shows **Crashed** | Missing env var | Open Logs → look for `Invalid env:` → add the missing key |
 | `P1001: Can't reach database` | Supabase URI wrong / not saved | Check `DATABASE_URL` uses the full `postgresql://...` URI |
-| **Backend offline** (red dot) | `REDIS_URL` not set or wrong | Check `REDIS_URL` in Render matches the Upstash TCP URL (`redis://...`) |
-| Health returns `503` / `redis: error` | Upstash URL expired or wrong | Re-copy the TCP URL from Upstash dashboard → update in Render |
+| **Backend offline** (red dot) | `REDIS_URL` override points at an external Redis | Remove the `REDIS_URL` override in Render → Environment; it must be `redis://localhost:6379` (in-container) |
+| Health returns `503` / `redis: error` | `ERR max requests limit exceeded` from a metered Redis (Upstash) | Remove the Upstash override and redeploy — the container's Redis is unlimited and free |
 | Upload → **FAILED** | S3 endpoint wrong | Check `MINIO_ENDPOINT` includes `https://.../storage/v1/s3`; keys are the S3 keys (not the project anon key) |
+| Log spam: `ERR max requests limit exceeded` (Upstash) | External Redis override left in the dashboard | Delete the `REDIS_URL` override in Render → Environment → it must be `redis://localhost:6379` (in-container Redis) |
 | Chat → `Failed to process` | Both providers down | Check `GROQ_API` / `OPENROUTER_API` values |
 | App loads but API dead | Cold start | Wait ~1 min after first visit; UptimeRobot should prevent this |
 | `vector(768)` error at boot | pgvector not enabled | Check logs show `pgvector extension ready` (init-db.ts runs first) |
@@ -175,8 +165,9 @@ Open `https://<name>.onrender.com` in a browser:
 - **Everything:** ₹0 / month
 - **Supabase:** free projects pause after 1 week of inactivity
   (wake on the next request — log in occasionally; UptimeRobot keeps it alive).
-- **Upstash:** free tier has no expiry; 10k commands/day is plenty for uploads.
-  Check your dashboard occasionally.
+- **Redis:** runs inside the container — no external service, no quota to
+  watch. Memory-only: a restart re-queues any in-flight documents (the app
+  re-queues QUEUED/PROCESSING docs automatically at boot).
 - **Render free web service:** 750 hours/month. UptimeRobot keeps it awake
   24/7 → ~744 h/month. You're at the limit — don't add a second always-on
   Render service on the same account.
@@ -190,7 +181,7 @@ Open `https://<name>.onrender.com` in a browser:
 3. **One S3-standard client, three backends** — AWS SDK speaks to local MinIO, Supabase, and R2; swapping storage is a config change, not a code change
 4. **Multi-store consistency** — delete removes pgvector chunks + S3 object (no orphans)
 5. **Boot-time DB init** — `CREATE EXTENSION vector` before schema push (managed PG ≠ Docker image)
-6. **Durable document queue** — BullMQ on Upstash Redis: restart-safe indexing, exponential backoff, 3 retries; survives web-server cold starts
+6. **Durable document queue** — BullMQ on in-container Redis (free, unlimited): exponential backoff, 3 retries, plus boot-time re-queue of stranded QUEUED/PROCESSING docs so cold starts never lose an upload
 7. **Health endpoint with per-dependency timeouts** — each probe (Postgres, Redis) races a 3 s deadline; a dead dependency reports fast instead of hanging the probe (used by both the UI status dot and Render's own health checks)
 8. **Uptime monitoring** — free-tier keep-alive via UptimeRobot, alerting included
 9. **Secret hygiene** — `.env` gitignored, secrets injected via platform env vars, `render.yaml` marks them `sync: false`

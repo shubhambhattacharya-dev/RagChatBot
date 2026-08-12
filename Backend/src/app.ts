@@ -36,6 +36,31 @@ export async function buildApp(){
     const documentWorker = createWorker("document-processing", async (job) => {
       await processDocument(job.data.documentId, job.data.fileKey);
     });
+
+    // In-container Redis is ephemeral — a restart wipes the queue. Re-queue any
+    // documents a previous run left stranded in QUEUED/PROCESSING so they still
+    // get indexed (jobId dedupes — no double-processing). Non-fatal: a transient
+    // DB/Redis outage at boot must not prevent the server from starting.
+    try {
+      const stranded = await prisma.document.findMany({
+        where: { status: { in: ["QUEUED", "PROCESSING"] } },
+        select: { id: true, fileKey: true },
+      });
+      await Promise.allSettled(
+        stranded.map((doc) =>
+          documentQueue.add(
+            "index-document",
+            { documentId: doc.id, fileKey: doc.fileKey },
+            { jobId: doc.id }
+          )
+        )
+      );
+      if (stranded.length > 0) {
+        console.log(`Re-queued ${stranded.length} document(s) left over from a previous run`);
+      }
+    } catch (error) {
+      console.warn("Failed to re-queue leftover documents:", error);
+    }
     app.addHook("onClose", async () => {
       await documentWorker.close();
       await documentQueue.close();
