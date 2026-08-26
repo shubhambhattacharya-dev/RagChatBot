@@ -1,8 +1,13 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 import { chunkText, enrichChunks } from "../../src/utils/chunking";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const text = readFileSync(join(__dirname, "..", "fixtures", "attention.txt"), "utf8");
 
 test("keeps authors and emails in the enriched title chunk", async () => {
-  const text = await Bun.file("tests/fixtures/attention.txt").text();
   const chunks = enrichChunks(chunkText(text), "attention.txt");
   const authorChunk = chunks.find((chunk) => chunk.content.includes("Ashish Vaswani"));
 

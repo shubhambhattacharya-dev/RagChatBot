@@ -1,10 +1,8 @@
 /* ============================================
-   RAG ChatBot — Frontend Application
+   RAG Space — Minimalist Frontend Application
    ============================================ */
 
-// Same-origin API on any production host (Render etc.) — no hardcoded URL.
-// Special case: Live Server on port 5500 must call the local backend at :3000
-// (CORS on the backend already allows that origin).
+// Configured API target
 const configuredApi = typeof window.RAG_API_BASE === 'string'
   ? window.RAG_API_BASE.replace(/\/$/, '')
   : '';
@@ -44,8 +42,183 @@ function initDOM() {
   el.attachBtn = $('#attachBtn');
   el.statusDot = $('#statusDot');
   el.statusLabel = $('#statusLabel');
+  el.canvas3d = $('#bg3dCanvas');
 }
 initDOM();
+
+// ==================== 3D GREEN AURORA & SHOOTING STARS CANVAS ENGINE ====================
+function initMinimal3D() {
+  if (!el.canvas3d) return;
+  const ctx = el.canvas3d.getContext('2d');
+  let w = (el.canvas3d.width = window.innerWidth);
+  let h = (el.canvas3d.height = window.innerHeight);
+
+  window.addEventListener('resize', () => {
+    w = el.canvas3d.width = window.innerWidth;
+    h = el.canvas3d.height = window.innerHeight;
+  });
+
+  const mouse = { x: w / 2, y: h / 2, targetX: w / 2, targetY: h / 2 };
+  window.addEventListener('mousemove', (e) => {
+    mouse.targetX = e.clientX;
+    mouse.targetY = e.clientY;
+  });
+
+  // 1. 3D Starfield & Aurora Particles
+  const numParticles = 160;
+  const particles = [];
+  for (let i = 0; i < numParticles; i++) {
+    const isAurora = i % 3 === 0;
+    particles.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      z: Math.random() * 800 + 1,
+      size: isAurora ? Math.random() * 2.5 + 1 : Math.random() * 1.2 + 0.4,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      alpha: Math.random() * 0.6 + 0.2,
+      color: isAurora
+        ? (i % 6 === 0 ? '#4ade80' : i % 6 === 3 ? '#00ffaa' : '#10b981')
+        : '#3b82f6',
+    });
+  }
+
+  // 2. 3D Top-Sky Shooting Stars (Meteors & Comets) Engine
+  const comets = [];
+  function spawnComet() {
+    if (comets.length < 7 && Math.random() < 0.07) {
+      const fromTop = Math.random() > 0.3;
+      comets.push({
+        x: fromTop ? Math.random() * (w * 1.2) - w * 0.2 : -30,
+        y: fromTop ? -30 : Math.random() * (h * 0.4),
+        z: Math.random() * 600 + 80,
+        length: Math.random() * 160 + 80,
+        speed: Math.random() * 16 + 10,
+        angle: Math.PI / 3.8 + (Math.random() - 0.5) * 0.15,
+        alpha: 1,
+        color: Math.random() > 0.4 ? '#4ade80' : Math.random() > 0.5 ? '#00ffaa' : '#3b82f6',
+      });
+    }
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, w, h);
+
+    mouse.x += (mouse.targetX - mouse.x) * 0.03;
+    mouse.y += (mouse.targetY - mouse.y) * 0.03;
+
+    const offsetX = (mouse.x - w / 2) * 0.04;
+    const offsetY = (mouse.y - h / 2) * 0.04;
+
+    const gifLayer = document.getElementById('gif3dLayer');
+    if (gifLayer) {
+      const rx = ((mouse.y - h / 2) / (h / 2)) * -6;
+      const ry = ((mouse.x - w / 2) / (w / 2)) * 6;
+      gifLayer.style.transform = `perspective(1200px) rotateX(${rx}deg) rotateY(${ry}deg)`;
+    }
+
+    // Draw Particles
+    particles.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+
+      if (p.x < 0) p.x = w;
+      if (p.x > w) p.x = 0;
+      if (p.y < 0) p.y = h;
+      if (p.y > h) p.y = 0;
+
+      const px = p.x + offsetX * (400 / p.z);
+      const py = p.y + offsetY * (400 / p.z);
+
+      ctx.beginPath();
+      ctx.arc(px, py, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.alpha;
+      ctx.shadowBlur = p.size * 3;
+      ctx.shadowColor = p.color;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    });
+
+    // Render & Update Top-Sky 3D Shooting Stars
+    spawnComet();
+    for (let i = comets.length - 1; i >= 0; i--) {
+      const c = comets[i];
+      c.x += Math.cos(c.angle) * c.speed;
+      c.y += Math.sin(c.angle) * c.speed;
+      c.alpha -= 0.012;
+
+      const k = 400 / c.z;
+      const cx = c.x + offsetX * k;
+      const cy = c.y + offsetY * k;
+      const tailX = cx - Math.cos(c.angle) * c.length * k;
+      const tailY = cy - Math.sin(c.angle) * c.length * k;
+
+      if (c.alpha <= 0 || cx > w + 150 || cy > h + 150) {
+        comets.splice(i, 1);
+        continue;
+      }
+
+      // Trail Gradient
+      const grad = ctx.createLinearGradient(cx, cy, tailX, tailY);
+      grad.addColorStop(0, `rgba(255, 255, 255, ${c.alpha})`);
+      grad.addColorStop(0.3, c.color === '#4ade80' ? `rgba(74, 222, 128, ${c.alpha * 0.9})` : `rgba(59, 130, 246, ${c.alpha * 0.9})`);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      // Draw Trail
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = Math.max(1.2, 3 * k);
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = c.color;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(tailX, tailY);
+      ctx.stroke();
+
+      // Glowing Meteor Star Head
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1.5, 3 * k), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${c.alpha})`;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  render();
+}
+initMinimal3D();
+
+// ==================== 3D CARD TILT ENGINE ====================
+function init3DTilt() {
+  document.addEventListener('mousemove', (e) => {
+    const cards = document.querySelectorAll('.tilt-card');
+    cards.forEach((card) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      if (
+        x >= 0 &&
+        x <= rect.width &&
+        y >= 0 &&
+        y <= rect.height
+      ) {
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const rotateX = ((y - centerY) / centerY) * -5;
+        const rotateY = ((x - centerX) / centerX) * 5;
+
+        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+      } else {
+        card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+      }
+    });
+  });
+}
+init3DTilt();
 
 // ==================== UTILITIES ====================
 function escapeHTML(str) {
@@ -86,7 +259,7 @@ async function checkHealth() {
     } else throw new Error();
   } catch {
     el.statusDot.className = 'status-dot disconnected';
-    el.statusLabel.textContent = 'Backend offline';
+    el.statusLabel.textContent = 'Offline';
   }
 }
 checkHealth();
@@ -117,7 +290,6 @@ function toggleSidebar(open) {
 }
 
 // ==================== UPLOAD ====================
-// Drop zone
 el.dropZone.addEventListener('click', () => el.fileInput.click());
 
 el.dropZone.addEventListener('dragover', (e) => {
@@ -140,7 +312,6 @@ el.fileInput.addEventListener('change', () => {
   el.fileInput.value = '';
 });
 
-// Attach button also opens file picker
 el.attachBtn.addEventListener('click', () => el.fileInput.click());
 
 async function handleFiles(files) {
@@ -180,16 +351,15 @@ function addFileItem(file, status) {
   const existing = el.fileList.querySelector(`[data-name="${file.name}"]`);
   if (existing) existing.remove();
 
-  const icon = { pdf: '📕', docx: '📘', txt: '📄', md: '📝' };
+  const icon = { pdf: '📄', docx: '📄', txt: '📄', md: '📝' };
   const ext = file.name.split('.').pop() || '';
   const item = document.createElement('div');
-  item.className = 'file-item';
+  item.className = 'file-item tilt-card';
   item.dataset.name = file.name;
   item.innerHTML = `
     <span class="file-icon">${icon[ext] || '📄'}</span>
     <span class="file-name">${escapeHTML(file.name)}</span>
     <span class="file-status ${status}">${statusText(status)}</span>
-    ${status === 'uploading' ? `<div class="file-progress"><div class="file-progress-bar" style="width:40%"></div></div>` : ''}
   `;
   el.fileList.appendChild(item);
 }
@@ -200,13 +370,10 @@ function updateFileItem(file, status) {
   const statusEl = item.querySelector('.file-status');
   statusEl.className = `file-status ${status}`;
   statusEl.textContent = statusText(status);
-  // Remove progress bar
-  const bar = item.querySelector('.file-progress');
-  if (bar) bar.remove();
 }
 
 function statusText(s) {
-  return { uploading: 'Uploading…', processing: 'Processing…', ready: 'Ready ✓', error: 'Failed' }[s] || s;
+  return { uploading: 'Uploading…', processing: 'Indexing…', ready: 'Ready ✓', error: 'Failed' }[s] || s;
 }
 
 async function pollStatus(docId, file) {
@@ -218,7 +385,7 @@ async function pollStatus(docId, file) {
       if (doc.status === 'READY' || doc.status === 'ready') {
         updateFileItem(file, 'ready');
         state.docs.push(doc);
-        await loadDocs(); // refresh doc list + auto-select
+        await loadDocs();
         return;
       }
       if (doc.status === 'FAILED' || doc.status === 'failed') {
@@ -227,7 +394,7 @@ async function pollStatus(docId, file) {
         return;
       }
     } catch {
-      // Retry silently
+      // Retry
     }
   }
   updateFileItem(file, 'error');
@@ -242,7 +409,7 @@ async function loadDocs() {
     state.docs = await r.json();
     renderDocs();
   } catch {
-    // Backend offline — silent
+    // Silent fail if offline
   }
 }
 
@@ -252,11 +419,10 @@ function renderDocs() {
 
   if (state.docs.length === 0) {
     el.docList.innerHTML =
-      '<div class="doc-list-empty">No documents yet — upload one above</div>';
+      '<div class="doc-list-empty" style="font-size:11px; color:var(--text-tertiary); text-align:center; padding:10px;">No documents indexed</div>';
     return;
   }
 
-  // Auto-select the first READY doc if nothing selected yet
   if (!state.activeDocId) {
     const first = state.docs.find((d) => d.status === 'READY');
     if (first) state.activeDocId = first.id;
@@ -264,11 +430,11 @@ function renderDocs() {
 
   for (const doc of state.docs) {
     const item = document.createElement('div');
-    item.className = `doc-item${doc.id === state.activeDocId ? ' active' : ''}`;
+    item.className = `doc-item tilt-card${doc.id === state.activeDocId ? ' active' : ''}`;
     item.dataset.id = doc.id;
     item.title = doc.filename;
     item.innerHTML = `
-      <span class="doc-icon">${doc.status === 'READY' ? '📕' : '⏳'}</span>
+      <span class="doc-icon">${doc.status === 'READY' ? '📄' : '⏳'}</span>
       <span class="doc-name">${escapeHTML(doc.filename)}</span>
       <span class="doc-status ${doc.status === 'READY' ? 'ready' : doc.status === 'FAILED' ? 'error' : 'processing'}">${
         doc.status === 'READY' ? 'Ready' : doc.status === 'FAILED' ? 'Failed' : 'Indexing…'
@@ -280,15 +446,13 @@ function renderDocs() {
       </button>
     `;
 
-    // Click body = select active document
     item.addEventListener('click', (e) => {
       if (e.target.closest('.doc-delete')) return;
       state.activeDocId = doc.id;
       renderDocs();
-      toast(`Searching: ${doc.filename}`, 'success', 1500);
+      toast(`Scope: ${doc.filename}`, 'success', 1500);
     });
 
-    // Delete button
     item.querySelector('.doc-delete').addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!confirm(`Delete "${doc.filename}"?`)) return;
@@ -327,7 +491,7 @@ async function sendMessage() {
   } catch (err) {
     typing.remove();
     addMessageBubble(
-      `⚠️ ${err.message}. Check that the backend is running.`,
+      `⚠️ ${err.message}. Ensure backend is running.`,
       'error'
     );
   } finally {
@@ -337,7 +501,6 @@ async function sendMessage() {
 }
 
 async function streamResponse(question, typingEl) {
-  // Scope search to the active document when one is selected
   const docParam = state.activeDocId ? `&documentId=${state.activeDocId}` : '';
   const res = await fetch(`${API}/chat?question=${encodeURIComponent(question)}${docParam}`);
 
@@ -357,16 +520,24 @@ async function streamResponse(question, typingEl) {
 
   // Create message shell
   const bubble = document.createElement('div');
-  bubble.className = 'message assistant';
+  bubble.className = 'message message-assistant tilt-card';
   bubble.innerHTML = `
-    <div class="message-role">Assistant</div>
-    <div class="message-content"></div>
+    <div class="avatar avatar-ai">AI</div>
+    <div class="bubble">
+      <div class="status-stream-card" id="streamStatus">
+        <div class="status-spinner"></div>
+        <span id="statusMsg">Searching pgvector database...</span>
+      </div>
+      <div class="message-content"></div>
+    </div>
   `;
   const content = bubble.querySelector('.message-content');
+  const statusCard = bubble.querySelector('#streamStatus');
+  const statusMsg = bubble.querySelector('#statusMsg');
+  
   el.messages.appendChild(bubble);
   scrollBottom();
 
-  // Stream tokens
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -384,50 +555,36 @@ async function streamResponse(question, typingEl) {
       try {
         const p = JSON.parse(data);
         if (p.type === 'status' && p.message) {
-          // Observability status indicator
-          const roleEl = bubble.querySelector('.message-role');
-          if (roleEl) roleEl.textContent = `Assistant (${p.message})`;
+          if (statusMsg) statusMsg.textContent = p.message;
         }
         if (p.type === 'token' && p.content) {
+          if (statusCard) statusCard.style.display = 'none';
           text += p.content;
-          content.innerHTML = renderMD(text) + '<span class="stream-cursor"></span>';
-          scrollBottom();
-        }
-        if (p.type === 'warning' && p.message) {
-          text += `\n\n> ⚠️ ${p.message}`;
           content.innerHTML = renderMD(text);
           scrollBottom();
         }
-        if (p.type === 'error' && p.message) {
-          text += `\n\n> ❌ ${p.message}`;
-          content.innerHTML = renderMD(text);
-          scrollBottom();
+        if (p.type === 'sources' && p.documents) {
+          sources = p.documents;
         }
-        if (p.type === 'sources' && p.documents) sources = p.documents;
       } catch {
         /* skip malformed */
       }
     }
   }
 
-  // Restore Assistant role header
-  const roleEl = bubble.querySelector('.message-role');
-  if (roleEl) roleEl.textContent = 'Assistant';
-
-  // Final render + source citation chips (document names from retrieval)
-  const html = renderMD(text);
-  content.innerHTML = html;
+  if (statusCard) statusCard.style.display = 'none';
+  content.innerHTML = renderMD(text);
 
   if (sources.length) {
-    const wrap = document.createElement('div');
-    wrap.className = 'sources-wrap';
-    wrap.innerHTML = sources
-      .map(
-        (name) =>
-          `<span class="source-chip"><span class="source-num">📄</span>${escapeHTML(name)}</span>`
-      )
-      .join('');
-    bubble.appendChild(wrap);
+    const sourcesCard = document.createElement('div');
+    sourcesCard.className = 'sources-card';
+    sourcesCard.innerHTML = `
+      <div class="sources-label">RETRIEVED SOURCES</div>
+      <div class="source-chips">
+        ${sources.map((name) => `<span class="source-chip">📄 ${escapeHTML(name)}</span>`).join('')}
+      </div>
+    `;
+    bubble.querySelector('.bubble').appendChild(sourcesCard);
     scrollBottom();
   }
 
@@ -446,10 +603,12 @@ function removeWelcome() {
 
 function addMessageBubble(text, role) {
   const div = document.createElement('div');
-  div.className = `message ${role}`;
+  div.className = `message message-${role} tilt-card`;
   div.innerHTML = `
-    <div class="message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
-    <div class="message-content">${role === 'user' ? escapeHTML(text) : renderMD(text)}</div>
+    <div class="avatar avatar-${role}">${role === 'user' ? 'U' : 'AI'}</div>
+    <div class="bubble">
+      <div class="message-content">${role === 'user' ? escapeHTML(text) : renderMD(text)}</div>
+    </div>
   `;
   el.messages.appendChild(div);
   scrollBottom();
@@ -458,8 +617,16 @@ function addMessageBubble(text, role) {
 
 function addTypingBubble() {
   const div = document.createElement('div');
-  div.className = 'typing-indicator';
-  div.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
+  div.className = 'message message-assistant tilt-card';
+  div.innerHTML = `
+    <div class="avatar avatar-ai">AI</div>
+    <div class="bubble">
+      <div class="status-stream-card">
+        <div class="status-spinner"></div>
+        <span>Searching pgvector database...</span>
+      </div>
+    </div>
+  `;
   el.messages.appendChild(div);
   scrollBottom();
   return div;
@@ -471,14 +638,23 @@ function addHistoryItem(question) {
   if (empty) empty.remove();
 
   const item = document.createElement('div');
-  item.className = 'history-item';
+  item.className = 'history-item tilt-card';
   item.style.cursor = 'pointer';
+  item.style.padding = '8px 10px';
+  item.style.fontSize = '11.5px';
+  item.style.display = 'flex';
+  item.style.alignItems = 'center';
+  item.style.gap = '6px';
+  item.style.borderRadius = 'var(--r-md)';
+  item.style.background = 'var(--bg-surface)';
+  item.style.border = '1px solid var(--border-subtle)';
+  item.style.marginBottom = '4px';
+  
   item.innerHTML = `
-    <span style="font-size:12px; flex-shrink: 0;">💬</span>
-    <span class="file-name" style="font-size:11px;">${escapeHTML(question.slice(0, 50))}${question.length > 50 ? '…' : ''}</span>
+    <span style="color:var(--accent-blue);">💬</span>
+    <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(question.slice(0, 40))}${question.length > 40 ? '…' : ''}</span>
   `;
   item.addEventListener('click', () => {
-    // Scroll to top — simple interaction
     el.messages.scrollTo({ top: 0, behavior: 'smooth' });
   });
   el.historyList.appendChild(item);
@@ -487,40 +663,8 @@ function addHistoryItem(question) {
 // ==================== CLEAR ====================
 el.clearBtn.addEventListener('click', () => {
   $$('.message', el.messages).forEach((m) => m.remove());
-  $$('.typing-indicator', el.messages).forEach((m) => m.remove());
   state.messages = [];
-
-  if (!el.welcome) {
-    const w = document.querySelector('.welcome-screen');
-    if (w) { el.welcome = w; return; }
-    el.messages.innerHTML = `
-      <div class="welcome-screen" id="welcomeScreen">
-        <div class="welcome-graphic">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect x="4" y="4" width="40" height="40" rx="10" fill="#5e6ad2" opacity="0.12"/>
-            <path d="M16 28L20 32L32 18" stroke="#5e6ad2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <h2 class="welcome-title">Ready to explore your documents</h2>
-        <p class="welcome-desc">Upload a PDF, Word doc, or text file. I'll help you find answers instantly.</p>
-        <div class="welcome-tips">
-          <div class="tip-card">
-            <div class="tip-icon">📄</div>
-            <div class="tip-text">Upload any document to get started</div>
-          </div>
-          <div class="tip-card">
-            <div class="tip-icon">💬</div>
-            <div class="tip-text">Ask natural language questions</div>
-          </div>
-          <div class="tip-card">
-            <div class="tip-icon">🔗</div>
-            <div class="tip-text">Answers include source citations</div>
-          </div>
-        </div>
-      </div>
-    `;
-    el.welcome = $('#welcomeScreen');
-  }
+  location.reload();
 });
 
 // ==================== MARKDOWN RENDERER ====================
@@ -528,53 +672,63 @@ function renderMD(text) {
   if (!text) return '';
   let html = escapeHTML(text);
 
-  // Code blocks
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // 1. Code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>');
 
-  // Blockquotes (> text)
-  html = html.replace(/^&gt;\s*(.+)$/gm, '<blockquote>$1</blockquote>');
+  // 2. Markdown Tables
+  html = html.replace(/(?:^|\n)(\|.*\|(?:\n\|.*\|)+)(?=\n|$)/g, (match, tableContent) => {
+    const rows = tableContent.trim().split('\n').map((row) => row.trim());
+    if (rows.length < 2) return match;
 
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    const parseRow = (r) => r.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim());
+    const headers = parseRow(rows[0]);
+    const isSeparator = /^\|?[\s\-:|]+\|?$/.test(rows[1]);
+    const dataRows = isSeparator ? rows.slice(2) : rows.slice(1);
 
-  // Bold & Italic
+    const headHtml = `<thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead>`;
+    const bodyHtml = `<tbody>${dataRows.map((r) => `<tr>${parseRow(r).map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+
+    return `<div class="table-wrapper"><table class="minimal-table">${headHtml}${bodyHtml}</table></div>`;
+  });
+
+  // 3. Horizontal Rules
+  html = html.replace(/^---$/gm, '<hr class="minimal-hr" />');
+
+  // 4. Error & warning blockquotes in light green
+  html = html.replace(/^&gt;\s*([⚠️❌].*)$/gm, '<blockquote class="error-quote">$1</blockquote>');
+
+  // 5. Standard Blockquotes
+  html = html.replace(/^&gt;\s*(.+)$/gm, '<blockquote class="minimal-quote">$1</blockquote>');
+
+  // 6. Inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+
+  // 7. Bold & Italic
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  // Headings
-  html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+  // 8. Headings
+  html = html.replace(/^###\s+(.+)$/gm, '<h3 class="md-h3">$1</h3>');
+  html = html.replace(/^##\s+(.+)$/gm, '<h2 class="md-h2">$1</h2>');
+  html = html.replace(/^#\s+(.+)$/gm, '<h1 class="md-h1">$1</h1>');
 
-  // Numbered list items (e.g. 1. Item)
-  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="num-item">$1</li>');
+  // 9. Lists
+  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="md-li-num">$1</li>');
+  html = html.replace(/^[-*]\s+(.+)$/gm, '<li class="md-li-bullet">$1</li>');
 
-  // Bullet list items (e.g. - Item or * Item)
-  html = html.replace(/^[-*]\s+(.+)$/gm, '<li class="bullet-item">$1</li>');
-
-  // Wrap contiguous <li> tags into <ol> or <ul> lists
-  html = html.replace(/(<li class="num-item">[\s\S]*?<\/li>\n?)+/g, (m) => `<ol>${m}</ol>`);
-  html = html.replace(/(<li class="bullet-item">[\s\S]*?<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
-
-  // Links
-  html = html.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" style="color:var(--brand)">$1</a>'
-  );
-
-  // Line breaks + paragraphs
+  // 10. Line breaks & Paragraphs
   html = html.replace(/\n\n+/g, '</p><p>');
   html = html.replace(/\n/g, '<br>');
   html = '<p>' + html + '</p>';
   html = html.replace(/<p><br>/g, '<p>');
   html = html.replace(/<p><\/p>/g, '');
-  html = html.replace(/<p>(<h[123]>.*?<\/h[123]>)<\/p>/g, '$1');
-  html = html.replace(/<p>(<(ol|ul|blockquote|pre)>[\s\S]*?<\/\2>)<\/p>/g, '$1');
+  html = html.replace(/<\/div><br>/g, '</div>');
+  html = html.replace(/<\/table><br>/g, '</table>');
+  html = html.replace(/<hr class="minimal-hr" \/><br>/g, '<hr class="minimal-hr" />');
 
   return html;
 }
 
 // ==================== BOOT ====================
 loadDocs();
-console.log('🚀 RAG ChatBot UI ready — Linear-inspired design');
-console.log(`📡 API target: ${API}`);
+console.log('✨ RAG ChatBot application initialized');

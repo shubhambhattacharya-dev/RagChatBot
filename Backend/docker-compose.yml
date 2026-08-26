@@ -16,6 +16,9 @@ services:
       GROQ_API: ${GROQ_API}
       GEMINI_API: ${GEMINI_API}
       OPENROUTER_API: ${OPENROUTER_API}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}
     depends_on:
@@ -42,6 +45,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server --maxmemory-policy noeviction
     ports: ["${REDIS_PORT:-6379}:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

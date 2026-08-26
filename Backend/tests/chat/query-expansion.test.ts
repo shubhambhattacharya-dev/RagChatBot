@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { buildLexicalTsQuery, expandQuery } from "../../src/modules/chat/routes";
+import { describe, expect, test } from "vitest";
+import { buildLexicalTsQuery, expandQuery } from "../../src/modules/chat/retrieval";
 
 describe("RAG query expansion", () => {
   test("adds resume project-section terms to a project query", () => {

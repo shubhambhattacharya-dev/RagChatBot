@@ -9,6 +9,10 @@ export const EnvSchema=z.object({
     GEMINI_API:z.string().default(""),
     GROQ_API:z.string().default(""),
     REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
+    // Langfuse observability (optional — gracefully disabled when empty)
+    LANGFUSE_PUBLIC_KEY: z.string().default(""),
+    LANGFUSE_SECRET_KEY: z.string().default(""),
+    LANGFUSE_BASE_URL: z.string().default("https://cloud.langfuse.com"),
     REDIS_URL:z.string().default("redis://localhost:6379"),
     // Full S3-compatible endpoint URL:
     //   local MinIO   -> http://localhost:9000
@@ -25,8 +29,8 @@ export const EnvSchema=z.object({
 const Parsed=EnvSchema.safeParse(process.env);
 
 if(!Parsed.success){
-    console.error("Invalid env:",Parsed.error.flatten().fieldErrors),
-    process.exit(1)
+    console.error("Invalid env:",Parsed.error.flatten().fieldErrors);
+    process.exit(1);
 }
 
 export const env=Parsed.data

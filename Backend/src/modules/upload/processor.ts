@@ -1,19 +1,26 @@
 import { minio } from "../../config/minio";
 import { env } from "../../config/env";
 import prisma from "../../config/prisma";
+import logger from "../../logger";
+import { traceDocumentProcessing, flushLangfuse } from "../../config/langfuse";
 
 import { chunkText, detectDocumentOwner, enrichChunks, getChunkMetadata } from "../../utils/chunking";
-import { embedText } from "../../provider/embedding/gemini";
+import { embedBatch, embedText } from "../../provider/embedding/gemini";
 import { extractText } from "../../services/document/extract";
+import { markDeadLetter, classifyError } from "./dead-letter";
 
 export async function processDocument(
   documentId: string,
   fileKey: string
 ): Promise<void> {
   try {
-    console.log(`Processing document: ${documentId}`);
+    logger.info({ documentId }, "Processing document");
 
-    // 1. Download PDF from object storage (returns Buffer — S3-compatible)
+    const trace = await traceDocumentProcessing({
+      documentId,
+      filename: fileKey.split("/").pop() ?? fileKey,
+    });
+
     const document = await prisma.document.findUnique({
       where: { id: documentId },
       select: { filename: true, mimeType: true },
@@ -25,44 +32,39 @@ export async function processDocument(
 
     const buffer = await minio.getObject(env.MINIO_BUCKET, fileKey);
 
-    // 2. Extract text
     const text = await extractText(buffer, document.mimeType, document.filename);
 
     if (!text.trim()) {
       throw new Error("No text extracted from document.");
     }
 
-    // 3. Split into chunks
     const chunks = chunkText(text);
 
     if (chunks.length === 0) {
       throw new Error("No chunks generated.");
     }
 
-    // 3b. Enrich with metadata: Document name + Section labels + labeled
-    // contact fields (Email:/Phone:/Website:). The embedding now contains
-    // the WORDS "email", "phone", "website" next to the values — so
-    // "what is the email?" matches the chunk semantically (raw values like
-    // "bhattacharya.manish8@gmail.com" alone embed poorly against queries).
+
     const filename = document.filename;
 
     const enriched = enrichChunks(chunks, filename);
     const owner = detectDocumentOwner(chunks);
 
-    // 4. Generate embeddings and store them
-       // 4. Generate embeddings and store them (raw SQL — Prisma can't write vector columns)
-    for (const [index, chunk] of enriched.entries()) {
-      const embedding = await embedText(chunk.content, "RETRIEVAL_DOCUMENT");
-      const vector = `[${embedding.join(",")}]`;  // pgvector format
+    const chunkContents = enriched.map((c) => c.content);
+    const embeddings = await embedBatch(chunkContents, "RETRIEVAL_DOCUMENT");
+
+    for (let index = 0; index < enriched.length; index++) {
+      const chunk = enriched[index]!;
+      const embedding = embeddings[index]!;
+      const vector = `[${embedding.join(",")}]`; // pgvector format
       const metadata = JSON.stringify(getChunkMetadata(chunks[index]!, filename, owner));
 
       await prisma.$executeRaw`
-        INSERT INTO "Chunk" ("id", "documentId", "chunkIndex", "content", "embedding", "metadata", "createdAT")
+        INSERT INTO "Chunk" ("id", "documentId", "chunkIndex", "content", "embedding", "metadata", "createdAt")
         VALUES (gen_random_uuid(), ${documentId}, ${index}, ${chunk.content}, ${vector}::vector, ${metadata}::jsonb, NOW())
       `;
     }
 
-    // 5. Mark document as indexed
     await prisma.document.update({
       where: {
         id: documentId,
@@ -72,16 +74,20 @@ export async function processDocument(
       },
     });
 
-    console.log(
-      `Document ${documentId} indexed successfully (${chunks.length} chunks)`
-    );
-  } catch (error) {
-    console.error(`Failed to process document ${documentId}:`, error);
+    logger.info({ documentId, chunks: chunks.length }, "Document indexed successfully");
 
-    await prisma.chunk.deleteMany({ where: { documentId } });
-    await prisma.document
-      .update({ where: { id: documentId }, data: { status: "FAILED" } })
-      .catch(() => undefined);
+    if (trace) {
+      trace.update({
+        output: { chunks: chunks.length, owner },
+        metadata: { status: "READY" },
+      });
+    }
+    await flushLangfuse();
+  } catch (error) {
+    const { reason, retryable } = classifyError(error);
+    logger.error({ documentId, err: error, reason, retryable }, "Failed to process document");
+
+    await markDeadLetter(documentId, error);
 
     throw error;
   }

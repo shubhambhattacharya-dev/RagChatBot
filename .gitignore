@@ -26,3 +26,9 @@ Thumbs.db
 
 # Hermes desktop attachments (test PDFs, screenshots)
 .hermes/
+
+# Prisma generated client
+Backend/generated/
+
+# Stale runtime artifacts
+Backend/server.log

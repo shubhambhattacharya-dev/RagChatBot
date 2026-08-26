@@ -1,6 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Test 8 — end-to-end against the LIVE API (server must be running on :3000).
 // Verifies the full chain: upload → extract → chunk → embed → store → retrieve → prompt → LLM → answer.
@@ -16,7 +19,7 @@ interface Q {
 }
 
 const questions: Q[] = JSON.parse(
-  readFileSync(join(import.meta.dir, "questions.json"), "utf8")
+  readFileSync(join(__dirname, "questions.json"), "utf8")
 );
 
 // Collect SSE events from GET /chat?question=...

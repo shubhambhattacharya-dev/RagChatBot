@@ -1,0 +1,7 @@
+{
+  "name": "ragchatbot",
+  "private": true,
+  "scripts": {
+    "dev": "cd Backend && npm run dev"
+  }
+}

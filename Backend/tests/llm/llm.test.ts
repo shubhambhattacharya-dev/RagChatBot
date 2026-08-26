@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { streamChat } from "../../src/provider/llm/groq";
 
 const describeLive = process.env.RUN_LIVE_LLM_TESTS === "1" ? describe : describe.skip;

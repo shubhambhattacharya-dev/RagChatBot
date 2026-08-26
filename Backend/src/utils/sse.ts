@@ -1,27 +1,30 @@
 import type { FastifyReply } from "fastify";
+import { env } from "../config/env";
+
+const ALLOWED_ORIGINS = env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean);
 
 export function setupSSE(reply: FastifyReply) {
   const origin = reply.request.headers.origin;
+  let allowedOrigin: string | undefined = undefined;
+
+  if (origin) {
+    if (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.includes(origin)) {
+      allowedOrigin = origin;
+    }
+  }
 
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
-    // Keep CORS headers — writeHead replaces the whole header set,
-    // so re-add what @fastify/cors would have set.
-    ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
+    ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin, Vary: "Origin" } : {}),
   });
 
   reply.raw.flushHeaders?.();
 }
 
-export function sendSSE(
-  reply: FastifyReply,
-  data: unknown
-) {
-  reply.raw.write(
-    `data: ${JSON.stringify(data)}\n\n`
-  );
+export function sendSSE(reply: FastifyReply, data: unknown) {
+  reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 export function sendSSEDone(reply: FastifyReply) {

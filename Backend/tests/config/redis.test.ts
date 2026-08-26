@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { createRedis } from "../../src/config/redis";
 
 // Construction is lazy (no network until the first command), so these tests

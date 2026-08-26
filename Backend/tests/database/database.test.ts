@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import prisma from "../../src/config/prisma";
 
 const TEST_DOC_ID = "test-db-doc-0001";
@@ -25,7 +25,7 @@ describeIntegration("database storage", () => {
   test("chunk with embedding and metadata inserts via raw SQL", async () => {
     const vector = `[${Array.from({ length: 768 }, () => 0.1).join(",")}]`;
     await prisma.$executeRaw`
-      INSERT INTO "Chunk" ("id", "documentId", "chunkIndex", "content", "embedding", "metadata", "createdAT")
+      INSERT INTO "Chunk" ("id", "documentId", "chunkIndex", "content", "embedding", "metadata", "createdAt")
       VALUES (gen_random_uuid(), ${TEST_DOC_ID}, 0, ${"Document: db-test.pdf\nSection: Test"}, ${vector}::vector, ${JSON.stringify({ filename: "db-test.pdf", chunkIndex: 0 })}::jsonb, NOW())
     `;
 

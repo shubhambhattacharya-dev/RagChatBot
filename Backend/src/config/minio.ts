@@ -7,6 +7,7 @@ import {
   CreateBucketCommand,
 } from "@aws-sdk/client-s3";
 import { env } from "./env";
+import logger from "../logger";
 
 // S3-compatible client — works with local MinIO, Cloudflare R2, Supabase Storage.
 // MINIO_ENDPOINT is a FULL URL:
@@ -70,7 +71,7 @@ export async function ensureBucket() {
 
   if (!exists) {
     await minio.makeBucket(env.MINIO_BUCKET);
-    console.log(`Create bucket: ${env.MINIO_BUCKET}`);
+    logger.info({ bucket: env.MINIO_BUCKET }, "Created S3 bucket");
   }
 }
 

@@ -34,7 +34,7 @@ model Chunk{
   embedding Unsupported("vector(768)")?
   metadata Json?
   chunkIndex Int
-  createdAT DateTime @default(now())
+  createdAt DateTime @default(now())
 
 
   @@index([documentId])

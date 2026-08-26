@@ -1,4 +1,5 @@
 import { env } from "../../config/env";
+import logger from "../../logger";
 
 const EMBED_MODEL = "models/gemini-embedding-001";
 const API_URL = "https://generativelanguage.googleapis.com/v1beta";
@@ -96,7 +97,7 @@ export async function embedText(
   const cacheKey = `${taskType}:${text.trim().toLowerCase()}`;
   const cached = cacheGet(cacheKey);
   if (cached) {
-    console.log(`[Embedding Cache] ⚡ Cache HIT for "${text}" (0ms)`);
+    logger.debug({ text: text.slice(0, 80) }, "[Embedding Cache] ⚡ Cache HIT (0ms)");
     return cached;
   }
 
@@ -133,7 +134,7 @@ export async function embedText(
           if (delayMs > MAX_RETRY_WAIT_MS) {
             throw new Error(`Gemini API rate limit exceeded (429). Please retry in about ${Math.ceil(delayMs / 1000)} seconds.`);
           }
-          console.warn(`Gemini embedding rate-limited (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${(delayMs / 1000).toFixed(0)}s...`);
+          logger.warn({ attempt: attempt + 1, maxRetries: maxRetries + 1, delaySec: (delayMs / 1000).toFixed(0) }, "Gemini embedding rate-limited, retrying");
           await waitForRetry(delayMs, signal);
           continue;
         }
@@ -161,14 +162,15 @@ export async function embedText(
           lastError = error;
           break;
         }
-        console.warn(`Gemini embedding rate-limited (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${(delayMs / 1000).toFixed(0)}s...`);
+        logger.warn({ attempt: attempt + 1, maxRetries: maxRetries + 1, delaySec: (delayMs / 1000).toFixed(0) }, "Gemini embedding rate-limited, retrying");
         await waitForRetry(delayMs, signal);
         continue;
       }
       if (attempt < maxRetries && isTransientEmbeddingError(error)) {
         const delayMs = transientRetryDelay(attempt);
-        console.warn(
-          `Gemini embedding temporary failure (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${(delayMs / 1000).toFixed(0)}s...`
+        logger.warn(
+          { attempt: attempt + 1, maxRetries: maxRetries + 1, delaySec: (delayMs / 1000).toFixed(0) },
+          "Gemini embedding temporary failure, retrying"
         );
         await waitForRetry(delayMs, signal);
         continue;
@@ -179,7 +181,7 @@ export async function embedText(
   }
 
   const error = lastError;
-  console.error("Embedding generation failed:", error);
+  logger.error({ err: error }, "Embedding generation failed");
   if (error?.message?.includes("API_KEY_INVALID") || error?.message?.includes("API key not valid")) {
     throw new Error("Gemini API key is invalid. Get a new key from https://aistudio.google.com/apikey");
   }
@@ -207,4 +209,127 @@ function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
     };
     signal.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+/**
+ * High-throughput batch embedding generation.
+ * Batches requests to Gemini batchEmbedContents API with LRU cache integration and rate-limit retries.
+ */
+export async function embedBatch(
+  texts: string[],
+  taskType: EmbeddingTaskType,
+  signal?: AbortSignal,
+  batchSize = 50
+): Promise<number[][]> {
+  if (texts.length === 0) return [];
+
+  const results: (number[] | null)[] = new Array(texts.length).fill(null);
+  const uncachedIndices: number[] = [];
+  const uncachedTexts: string[] = [];
+
+  // Check cache first
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i]!.trim();
+    if (!text) {
+      results[i] = new Array(768).fill(0);
+      continue;
+    }
+    const cacheKey = `${taskType}:${text.toLowerCase()}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) {
+      results[i] = cached;
+    } else {
+      uncachedIndices.push(i);
+      uncachedTexts.push(text);
+    }
+  }
+
+  if (uncachedTexts.length === 0) {
+    return results as number[][];
+  }
+
+  // Chunk uncached texts into batches
+  for (let b = 0; b < uncachedTexts.length; b += batchSize) {
+    const batchSlice = uncachedTexts.slice(b, b + batchSize);
+    const indexSlice = uncachedIndices.slice(b, b + batchSize);
+
+    const maxRetries = 3;
+    let batchSucceeded = false;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(
+          `${API_URL}/${EMBED_MODEL}:batchEmbedContents?key=${env.GEMINI_API}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              requests: batchSlice.map((t) => ({
+                model: EMBED_MODEL,
+                content: { parts: [{ text: t }] },
+                taskType,
+                outputDimensionality: 768,
+              })),
+            }),
+            signal: signal
+              ? AbortSignal.any([signal, AbortSignal.timeout(env.REQUEST_TIMEOUT_MS)])
+              : AbortSignal.timeout(env.REQUEST_TIMEOUT_MS),
+          }
+        );
+
+        if (response.status === 429) {
+          const errorBody = await response.text();
+          if (attempt < maxRetries) {
+            const delayMs = parseRetryDelay(errorBody);
+            await waitForRetry(delayMs, signal);
+            continue;
+          }
+          throw new Error(`Gemini batch embedding rate limit exceeded: ${errorBody}`);
+        }
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(`Gemini batch API error (${response.status}): ${errorBody}`);
+        }
+
+        const data = (await response.json()) as { embeddings?: { values?: number[] }[] };
+        const embeddings = data.embeddings;
+        if (!embeddings || embeddings.length !== batchSlice.length) {
+          throw new Error("Mismatch in batch embeddings response count.");
+        }
+
+        for (let i = 0; i < batchSlice.length; i++) {
+          const rawValues = embeddings[i]?.values;
+          if (!rawValues) throw new Error("Missing embedding in batch response.");
+          const validated = validateEmbedding(rawValues, 768);
+          const originalIdx = indexSlice[i]!;
+          results[originalIdx] = validated;
+          cacheSet(`${taskType}:${batchSlice[i]!.toLowerCase()}`, validated);
+        }
+
+        batchSucceeded = true;
+        break;
+      } catch (err: any) {
+        if (attempt < maxRetries && (isTransientEmbeddingError(err) || err?.message?.includes("429"))) {
+          const delayMs = transientRetryDelay(attempt);
+          await waitForRetry(delayMs, signal);
+          continue;
+        }
+
+        // Fallback: process this batch slice one by one via embedText
+        for (let i = 0; i < batchSlice.length; i++) {
+          const originalIdx = indexSlice[i]!;
+          results[originalIdx] = await embedText(batchSlice[i]!, taskType, signal);
+        }
+        batchSucceeded = true;
+        break;
+      }
+    }
+
+    if (!batchSucceeded) {
+      throw new Error(`Failed to generate batch embeddings for slice starting at index ${b}`);
+    }
+  }
+
+  return results as number[][];
 }

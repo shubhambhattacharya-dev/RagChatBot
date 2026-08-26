@@ -1,10 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { extractText } from "../../src/services/document/extract";
 
 function fixture(name: string): Buffer {
-  return readFileSync(join(import.meta.dir, "..", "fixtures", name));
+  return readFileSync(join(__dirname, "..", "fixtures", name));
 }
 
 describe("PDF extraction (src/services/document/extract.ts)", () => {

@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { env } from "../../config/env";
+import logger from "../../logger";
 
 export const groq = new OpenAI({
   // The application validates the real key at startup. A non-secret placeholder
@@ -14,7 +15,9 @@ export const groq = new OpenAI({
 const MAX_CONTEXT_CHUNKS = 8;
 
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta";
-const GEMINI_MODEL = "gemini-flash-latest";
+// gemini-2.5-flash: best price-performance, free tier available.
+// Fallback chain: 2.5-flash → 3.5-flash (if user has newer API access).
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
 
 // Retry config for rate-limited APIs
 const MAX_RETRIES = 3;
@@ -96,9 +99,28 @@ export function buildChatMessages(
 /**
  * Stream a chat response from Gemini REST API (free tier fallback).
  * Converts OpenAI-style messages to Gemini's format.
- * Automatically retries on 429 rate limits with parsed delay.
+ * Tries multiple model names for maximum compatibility.
  */
 async function* streamFromGemini(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  signal?: AbortSignal,
+  maxTokens = 1024
+): AsyncGenerator<string> {
+  // Try each Gemini model until one works
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      yield* streamFromGeminiModel(modelName, messages, signal, maxTokens);
+      return; // Success
+    } catch (err: any) {
+      const isLast = modelName === GEMINI_MODELS[GEMINI_MODELS.length - 1];
+      if (isLast) throw err; // Last model — propagate error
+      logger.warn({ model: modelName, err: err?.message }, "Gemini model failed, trying next");
+    }
+  }
+}
+
+async function* streamFromGeminiModel(
+  modelName: string,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   signal?: AbortSignal,
   maxTokens = 1024
@@ -116,7 +138,7 @@ async function* streamFromGemini(
       parts: [{ text: m.content as string }],
     }));
 
-  const url = `${GEMINI_API_URL}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${env.GEMINI_API}`;
+  const url = `${GEMINI_API_URL}/models/${modelName}:streamGenerateContent?alt=sse&key=${env.GEMINI_API}`;
   const body = JSON.stringify({
     systemInstruction: { parts: systemParts },
     contents,
@@ -145,8 +167,9 @@ async function* streamFromGemini(
       const delayMs = parseRetryDelay(errorBody);
 
       if (attempt < MAX_RETRIES) {
-        console.warn(
-          `Gemini rate-limited (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${(delayMs / 1000).toFixed(0)}s...`
+        logger.warn(
+          { attempt: attempt + 1, maxRetries: MAX_RETRIES + 1, delaySec: (delayMs / 1000).toFixed(0) },
+          "Gemini rate-limited, retrying"
         );
         await sleep(delayMs);
         continue;
@@ -213,7 +236,8 @@ async function* streamFromGemini(
 export async function* streamChat(
   question: string,
   contextChunks: string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  usageRef?: { current: TokenUsage | null }
 ): AsyncGenerator<string> {
   if (!question.trim()) {
     throw new Error("Question cannot be empty.");
@@ -234,66 +258,100 @@ export async function* streamChat(
   // Fall back only before emitting a token. Otherwise a second provider would
   // append a complete duplicate answer to the client's partial response.
   let emittedToken = false;
-  // llama-3.1-8b-instant: 500K TPD free tier (vs 100K for 70b-versatile)
-  const GROQ_MODEL = "llama-3.1-8b-instant";
-  try {
-    for await (const token of streamFrom(groq, GROQ_MODEL, messages, signal, 1024)) {
-      emittedToken = true;
-      yield token;
-    }
-  } catch (groqError: any) {
-    if (emittedToken || signal?.aborted) throw groqError;
-
-    // Groq 429 with short retry window → wait and retry once before falling back
-    const retryAfter = groqError?.headers?.get?.("retry-after");
-    const retrySeconds = retryAfter ? parseInt(retryAfter, 10) : NaN;
-    if (groqError?.status === 429 && !isNaN(retrySeconds) && retrySeconds <= 30) {
-      console.warn(`Groq rate-limited, retrying in ${retrySeconds}s...`);
-      await sleep(retrySeconds * 1000);
-      try {
-        for await (const token of streamFrom(groq, GROQ_MODEL, messages, signal, 1024)) {
-          emittedToken = true;
-          yield token;
-        }
-        return;
-      } catch {
-        // Retry also failed — fall through to Gemini
-      }
-    }
-
-    console.error("Groq failed, falling back to Gemini:", groqError);
+  const GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+  ];
+  let GROQ_MODEL = GROQ_MODELS[0]!;
+  // Try each Groq model in order until one works
+  for (let i = 0; i < GROQ_MODELS.length; i++) {
+    GROQ_MODEL = GROQ_MODELS[i]!;
     try {
-      yield* streamFromGemini(messages, signal, 1024);
-    } catch (fallbackError: any) {
-      console.error("Gemini fallback also failed:", fallbackError);
-      // Surface the actual error so users can debug
-      const groqMsg = groqError?.message || "Groq failed";
-      const geminiMsg = fallbackError?.message || "Gemini failed";
-      throw new Error(`LLM error — Groq: ${groqMsg} | Gemini: ${geminiMsg}`);
+      for await (const token of streamFrom(groq, GROQ_MODEL, messages, signal, 1024, usageRef)) {
+        emittedToken = true;
+        yield token;
+      }
+      return; // Success — done
+    } catch (groqError: any) {
+      if (emittedToken || signal?.aborted) throw groqError;
+
+      // 404 = model not available for this account — try next model
+      if (groqError?.status === 404 && i < GROQ_MODELS.length - 1) {
+        logger.warn({ model: GROQ_MODEL, status: 404 }, "Groq model unavailable, trying next");
+        continue;
+      }
+
+      // 429 with short retry window → wait and retry once
+      const retryAfter = groqError?.headers?.get?.("retry-after");
+      const retrySeconds = retryAfter ? parseInt(retryAfter, 10) : NaN;
+      if (groqError?.status === 429 && !isNaN(retrySeconds) && retrySeconds <= 30) {
+        logger.warn({ retrySeconds }, "Groq rate-limited, retrying");
+        await sleep(retrySeconds * 1000);
+        try {
+          for await (const token of streamFrom(groq, GROQ_MODEL, messages, signal, 1024, usageRef)) {
+            emittedToken = true;
+            yield token;
+          }
+          return;
+        } catch {
+          // Retry also failed — try next model or Gemini
+          if (i < GROQ_MODELS.length - 1) continue;
+        }
+      }
+
+      // All Groq models failed — fall through to Gemini
+      logger.error({ err: groqError }, "Groq failed, falling back to Gemini");
+      break;
     }
   }
+
+  // Gemini fallback
+  try {
+    yield* streamFromGemini(messages, signal, 1024);
+  } catch (fallbackError: any) {
+    logger.error({ err: fallbackError }, "Gemini fallback also failed");
+    const groqMsg = "All Groq models unavailable";
+    const geminiMsg = fallbackError?.message || "Gemini failed";
+    throw new Error(`LLM error — Groq: ${groqMsg} | Gemini: ${geminiMsg}`);
+  }
 }
+
+export type TokenUsage = {
+  input: number;
+  output: number;
+  total: number;
+};
 
 async function* streamFrom(
   client: OpenAI,
   model: string,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   signal?: AbortSignal,
-  maxTokens = 1024
+  maxTokens = 1024,
+  usageRef?: { current: TokenUsage | null }
 ): AsyncGenerator<string> {
   const stream = await client.chat.completions.create({
     model,
     messages,
     stream: true,
+    stream_options: { include_usage: true },
     temperature: 0.2,
     max_tokens: maxTokens,
   }, { signal });
 
   for await (const chunk of stream) {
+    // Content tokens
     const token = chunk.choices.at(0)?.delta?.content;
+    if (token) yield token;
 
-    if (token) {
-      yield token;
+    // Usage data arrives in the final chunk (when stream_options.include_usage is set)
+    if (chunk.usage && usageRef) {
+      usageRef.current = {
+        input: chunk.usage.prompt_tokens,
+        output: chunk.usage.completion_tokens,
+        total: chunk.usage.total_tokens,
+      };
     }
   }
 }

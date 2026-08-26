@@ -41,3 +41,9 @@ services:
         sync: false                      # paste your Gemini key
       - key: OPENROUTER_API
         sync: false                      # paste your OpenRouter key (env requires it)
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false                      # paste your Langfuse public key (pk-lf-...)
+      - key: LANGFUSE_SECRET_KEY
+        sync: false                      # paste your Langfuse secret key (sk-lf-...)
+      - key: LANGFUSE_BASE_URL
+        value: https://cloud.langfuse.com # 🇪🇺 EU region (or https://us.cloud.langfuse.com for 🇺🇸 US)

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { embedText, validateEmbedding } from "../../src/provider/embedding/gemini";
 
 const liveTest = process.env.RUN_LIVE_EMBEDDING_TESTS === "1" ? test : test.skip;

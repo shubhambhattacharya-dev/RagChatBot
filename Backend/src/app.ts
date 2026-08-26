@@ -1,9 +1,13 @@
 import fastify from "fastify";
 import cors from '@fastify/cors'
+import cookie from '@fastify/cookie'
 import multipart from "@fastify/multipart"
 import staticFiles from '@fastify/static'
 import { fileURLToPath } from "node:url";
 import {env, assertRuntimeConfig} from './config/env'
+import logger from './logger'
+import { startInstrumentation, shutdownInstrumentation, langfuseEnabled } from './instrumentation'
+import { flushLangfuse } from './config/langfuse'
 import { ensureBucket } from "./config/minio";
 import { uploadRoutes } from "./modules/upload/router";
 import { statusRoutes } from "./modules/upload/status";
@@ -31,6 +35,12 @@ async function dependencyCheck(
 
 export async function buildApp(){
     assertRuntimeConfig();
+    // OTel MUST be initialized before any HTTP clients (OpenAI SDK, fetch).
+    // This is a no-op when Langfuse env vars are empty.
+    startInstrumentation();
+    // Fastify 5 requires a config object, not a pino instance.
+    // request.log gets request-scoped fields (request-id, method, url) automatically.
+    // Non-request code (worker, embedding, startup) imports logger.ts directly.
     const app=fastify({logger:{level:env.LOG_LEVEL}})
     const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
     const documentWorker = createWorker("document-processing", async (job) => {
@@ -56,18 +66,22 @@ export async function buildApp(){
         )
       );
       if (stranded.length > 0) {
-        console.log(`Re-queued ${stranded.length} document(s) left over from a previous run`);
+        logger.info({ count: stranded.length }, `Re-queued ${stranded.length} document(s) left over from a previous run`);
       }
     } catch (error) {
-      console.warn("Failed to re-queue leftover documents:", error);
+      logger.warn({ err: error }, "Failed to re-queue leftover documents");
     }
     app.addHook("onClose", async () => {
       await documentWorker.close();
       await documentQueue.close();
       await redis.quit();
       await prisma.$disconnect();
+      // Flush any buffered Langfuse events before the process exits.
+      await flushLangfuse();
+      await shutdownInstrumentation();
     });
     //plugin — configurable CORS origin (default: true for dev, set CORS_ORIGIN in prod)
+    await app.register(cookie)
     await app.register(cors, {
       origin: corsOrigins.length > 0 ? corsOrigins : false,
       methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
@@ -111,14 +125,14 @@ return app;
 
 const app=await buildApp();
 await app.listen({port:env.PORT,host:"0.0.0.0"});
-console.log(`🚀 Server running on http://localhost:${env.PORT}`);
+logger.info(`🚀 Server running on http://localhost:${env.PORT}${langfuseEnabled ? " (Langfuse tracing enabled)" : ""}`);
 
 //graceful shutdown
 
 const listeners=["SIGINT","SIGTERM"] as const ;
 for(const signal of listeners){
     process.on(signal,async()=>{
-        console.log(`\n${signal} received — shutting down gracefully...`)
+        logger.info(`\n${signal} received — shutting down gracefully...`)
         await app.close()
         process.exit(0)
     })

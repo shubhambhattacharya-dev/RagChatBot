@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import prisma from "../../src/config/prisma";
 import { embedText } from "../../src/provider/embedding/gemini";
 
@@ -148,6 +148,7 @@ describeLive("RAG Retrieval Quality across 3 Documents (attention.pdf, shubham.p
   for (const tc of TEST_CASES) {
     test(
       tc.name,
+      { timeout: 30000 },
       async () => {
         // 1.5s rate limit spacing for free-tier embedding API
         await new Promise((r) => setTimeout(r, 1500));
@@ -176,8 +177,7 @@ describeLive("RAG Retrieval Quality across 3 Documents (attention.pdf, shubham.p
 
         // Cosine distance should be within acceptable threshold (<= 0.5)
         expect(match!.distance).toBeLessThan(0.5);
-      },
-      { timeout: 30000 }
+      }
     );
   }
 });
