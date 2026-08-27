@@ -38,8 +38,8 @@
           ▼
    ┌────────────┐
    │ Groq LLM   │
-   │ llama-3.3-  │
-   │ 70b (stream)│
+   │ GPT-OSS /   │
+   │ Qwen (stream)│
    └────────────┘
 ```
 
@@ -118,8 +118,8 @@ data: [DONE]
 | **ORM** | Prisma 7 | Database access |
 | **Vector DB** | PostgreSQL + pgvector | Embedding storage & cosine similarity search |
 | **Embeddings** | Gemini gemini-embedding-001 | 768-dimension vectors |
-| **LLM** | Groq llama-3.3-70b | Fast inference with streaming |
-| **Fallback** | OpenRouter gpt-4o-mini | Groq quota exceeded → automatic failover |
+| **LLM** | Groq `openai/gpt-oss-120b` / `qwen/qwen3.6-27b` | Fast inference with streaming |
+| **Fallback** | Gemini `gemini-3.7-flash` / `gemini-3.6-flash` | Provider/model failure fallback |
 | **Queue** | BullMQ + Upstash Redis | Async document processing |
 | **Storage** | Supabase Storage (S3-compatible) | Original PDF files |
 | **Validation** | Zod | Request/response schemas |
@@ -147,7 +147,7 @@ data: [DONE]
 
 - [Bun](https://bun.sh) v1.0+
 - [Docker](https://docker.com) (for local PostgreSQL + MinIO)
-- API keys: Gemini, Groq (optional: OpenRouter)
+- API keys: Gemini and Groq
 
 ### Local Development
 
@@ -279,9 +279,14 @@ RUN_LIVE_RETRIEVAL_TESTS=1 bun run test:retrieval
 # Live LLM tests (requires API keys)
 RUN_LIVE_LLM_TESTS=1 bun run test:llm
 
-# End-to-end tests (full pipeline)
+# End-to-end tests (full pipeline; requires a running API and indexed fixtures)
 RUN_E2E_TESTS=1 bun run test:e2e
 ```
+
+The verified offline run passed **230 tests with 0 failures**. Thirty live,
+database, and provider tests are intentionally skipped unless their environment
+flags and external dependencies are configured. Live E2E tests require the
+regression documents to be indexed and `API_BASE` to point at the current server.
 
 ---
 
@@ -309,7 +314,7 @@ RagChatBot/
 │   │   │   ├── embedding/
 │   │   │   │   └── gemini.ts         # Gemini embedding API
 │   │   │   └── llm/
-│   │   │       └── groq.ts           # Groq + OpenRouter failover
+│   │   │       └── groq.ts           # Groq + Gemini failover
 │   │   ├── services/
 │   │   │   └── document/             # Document service layer
 │   │   └── utils/
@@ -379,10 +384,11 @@ See [DEPLOY.md](DEPLOY.md) for the complete production deployment guide.
 
 ## Known Limitations
 
-- **No authentication** — MVP focuses on RAG pipeline, not access control
+- **No authentication or tenant isolation** — this is a shared, single-workspace MVP
 - **In-memory chat history** — conversations not persisted across page reloads
 - **Single-user optimization** — no concurrent user isolation
-- **PDF-only** — DOCX support via mammoth, but primary target is PDF
+- **Scanned PDFs** — image-only PDFs require OCR, which is not included
+- **Provider availability** — model IDs and free-tier quotas can change
 - **Free tier constraints** — Render sleeps after 15min inactivity; UptimeRobot pings keep it alive
 
 ---
@@ -391,12 +397,12 @@ See [DEPLOY.md](DEPLOY.md) for the complete production deployment guide.
 
 - [ ] RAGAS evaluation metrics for answer quality measurement
 - [ ] Structured logging with Pino + Sentry error tracking
-- [ ] Authentication (JWT or session-based)
+- [ ] Authentication and tenant isolation (JWT or managed identity provider)
 - [ ] Chat history persistence (PostgreSQL)
 - [ ] Multi-file upload with progress tracking
 - [ ] Admin dashboard for document management
-- [ ] Rate limiting per IP
-- [ ] CI/CD pipeline (GitHub Actions)
+- [x] Rate limiting per IP
+- [x] CI/CD pipeline (GitHub Actions)
 
 ---
 

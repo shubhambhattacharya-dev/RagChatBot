@@ -103,7 +103,7 @@ days, which breaks uploads with `ERR max requests limit exceeded`.
 | `MINIO_BUCKET` | `rag-files` (already in render.yaml — leave it) |
 | `GROQ_API` | (your Groq key — same as local .env) |
 | `GEMINI_API` | (your Gemini key) |
-| `OPENROUTER_API` | (your OpenRouter key) |
+| `OPENROUTER_API` | No longer required; Gemini is the configured fallback |
 
 > Every secret in `render.yaml` is `sync: false` — the repo only declares the
 > key NAMES; the VALUES live in Render's dashboard. Never commit secrets.
@@ -177,7 +177,7 @@ Open `https://<name>.onrender.com` in a browser:
 ## Interview talking points (use these!)
 
 1. **Same-origin architecture** — backend serves the frontend → zero CORS class of bugs
-2. **Provider failover** — Groq → OpenRouter fallback, chat survives rate limits
+2. **Provider failover** — Groq → Gemini fallback, chat survives model/rate-limit failures
 3. **One S3-standard client, three backends** — AWS SDK speaks to local MinIO, Supabase, and R2; swapping storage is a config change, not a code change
 4. **Multi-store consistency** — delete removes pgvector chunks + S3 object (no orphans)
 5. **Boot-time DB init** — `CREATE EXTENSION vector` before schema push (managed PG ≠ Docker image)
