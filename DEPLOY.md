@@ -1,6 +1,10 @@
 # DEPLOY — Production Setup Guide (RAG ChatBot)
 
-Deploy the full stack (backend + frontend, one origin) to Render free tier,
+Deploy the full stack (backend + frontend, one origin) to Render.
+
+Production note: configure `REDIS_URL` to a managed persistent Redis service.
+The container-local Redis fallback is for local development only; Render
+replacements are ephemeral and can discard BullMQ jobs.
 with Supabase (Postgres + pgvector + S3-compatible storage) as the data layer,
 Redis (in-container) for the upload→index queue, and UptimeRobot as the keep-alive pinger.
 

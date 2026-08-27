@@ -41,8 +41,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory-policy noeviction
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
     ports: ["${REDIS_PORT:-6379}:6379"]
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -53,10 +55,11 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}
-    ports: ["${MINIO_PORT:-9000}:9000", "${MINIO_CONSOLE_PORT:-9001}:9001"]
+    ports: ["${MINIO_PORT:-9000}:9000"]
     volumes:
       - minio_data:/data
 
 volumes:
   pg_data:
   minio_data:
+  redis_data:

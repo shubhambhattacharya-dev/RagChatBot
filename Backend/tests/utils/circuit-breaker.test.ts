@@ -225,4 +225,18 @@ describe("CircuitBreaker", () => {
       expect(defaultBreaker.getState()).toBe("open");
     });
   });
+
+  describe("execute", () => {
+    test("records success and returns the operation value", async () => {
+      const value = await breaker.execute(async () => "ok");
+      expect(value).toBe("ok");
+      expect(breaker.getState()).toBe("closed");
+    });
+
+    test("records failures and rejects when the circuit opens", async () => {
+      const guarded = new CircuitBreaker({ failureThreshold: 1, cooldownMs: 1000 });
+      await expect(guarded.execute(async () => { throw new Error("down"); })).rejects.toThrow("down");
+      await expect(guarded.execute(async () => "never")).rejects.toThrow("temporarily unavailable");
+    });
+  });
 });

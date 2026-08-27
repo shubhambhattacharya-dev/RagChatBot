@@ -26,4 +26,4 @@ RUN apt-get update \
 # 4. Boot sequence: start Redis → enable pgvector → push schema → start server.
 #    Managed Postgres (Render) needs explicit CREATE EXTENSION vector.
 EXPOSE 3000
-CMD ["sh", "-c", "redis-server --daemonize yes --save '' --appendonly no && bun run db:setup && bun src/app.ts"]
+CMD ["sh", "-c", "if [ \"$NODE_ENV\" = \"production\" ] && echo \"$REDIS_URL\" | grep -Eq 'redis://(localhost|127\\.0\\.0\\.1)(:|$)'; then echo 'Refusing production startup with non-persistent local Redis. Configure managed REDIS_URL.' >&2; exit 1; fi; if echo \"$REDIS_URL\" | grep -Eq 'redis://(localhost|127\\.0\\.0\\.1)(:|$)'; then redis-server --daemonize yes --save '' --appendonly no; fi; bun run db:setup && bun src/app.ts"]

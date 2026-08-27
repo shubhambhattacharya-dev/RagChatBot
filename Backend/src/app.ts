@@ -10,19 +10,33 @@ import { ensureBucket } from "./config/minio";
 import { uploadRoutes } from "./modules/upload/router";
 import { statusRoutes } from "./modules/upload/status";
 import { chatRoutes } from "./modules/chat/routes";
-import { createWorker, documentQueue, redis } from "./config/redis";
+import { createWorker, documentQueue, enqueueDocument, redis } from "./config/redis";
 import prisma from "./config/prisma";
 import { processDocument } from "./modules/upload/processor";
 import { withTimeout } from "./utils/timeout";
 import { rateLimit } from "./utils/rate-limiter";
+import { initializeObservability, shutdownObservability } from "./observability";
+import { redisCircuitBreaker } from "./utils/resilience";
+import { notifyAlert } from "./alerts";
 
 /** A slow dependency must never hang /health — the UI status dot and Render's
  *  own health checks both depend on it answering quickly. */
 const HEALTH_CHECK_TIMEOUT_MS = 3_000;
-const requestRateLimit = rateLimit({
+  const requestRateLimit = rateLimit({
   maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
   windowMs: env.RATE_LIMIT_WINDOW_MS,
-});
+  redis,
+  });
+  const chatRateLimit = rateLimit({
+    maxRequests: env.CHAT_RATE_LIMIT_MAX_REQUESTS,
+    windowMs: env.RATE_LIMIT_WINDOW_MS,
+    redis,
+  });
+  const uploadRateLimit = rateLimit({
+    maxRequests: env.UPLOAD_RATE_LIMIT_MAX_REQUESTS,
+    windowMs: env.RATE_LIMIT_WINDOW_MS,
+    redis,
+  });
 
 async function dependencyCheck(
   label: string,
@@ -38,7 +52,8 @@ async function dependencyCheck(
 
 export async function buildApp(){
     assertRuntimeConfig();
-    const app=fastify({logger:{level:env.LOG_LEVEL}, trustProxy: env.NODE_ENV === "production"})
+    initializeObservability();
+    const app=fastify({loggerInstance: logger, trustProxy: env.NODE_ENV === "production", requestIdHeader: "x-request-id"})
     const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
     const documentWorker = createWorker("document-processing", async (job) => {
       await processDocument(job.data.documentId, job.data.fileKey);
@@ -55,11 +70,7 @@ export async function buildApp(){
       });
       await Promise.allSettled(
         stranded.map((doc) =>
-          documentQueue.add(
-            "index-document",
-            { documentId: doc.id, fileKey: doc.fileKey },
-            { jobId: doc.id }
-          )
+          enqueueDocument(doc.id, doc.fileKey)
         )
       );
       if (stranded.length > 0) {
@@ -73,16 +84,30 @@ export async function buildApp(){
       await documentQueue.close();
       await redis.quit();
       await prisma.$disconnect();
+      await shutdownObservability();
     });
     //plugin — configurable CORS origin (default: true for dev, set CORS_ORIGIN in prod)
-    await app.register(cookie)
+    await app.register(cookie, { secret: env.SESSION_SECRET })
     await app.register(cors, {
       origin: corsOrigins.length > 0 ? corsOrigins : false,
       methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
     })
-    await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
+    await app.register((await import("fastify-metrics")).default, {
+      endpoint: env.METRICS_ENABLED ? "/metrics" : null,
+      defaultMetrics: { enabled: env.METRICS_ENABLED },
+    });
+    await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024, files: 1, parts: 2 } });
+    app.addHook("onSend", async (_request, reply) => {
+      reply.header("X-Content-Type-Options", "nosniff");
+      reply.header("X-Frame-Options", "DENY");
+      reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+      reply.header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'");
+      if (env.NODE_ENV === "production") reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    });
     app.addHook("onRequest", async (request, reply) => {
       if (request.url.startsWith("/health")) return;
+      if (request.url.startsWith("/chat")) return chatRateLimit(request, reply);
+      if (request.url.startsWith("/upload")) return uploadRateLimit(request, reply);
       return requestRateLimit(request, reply);
     });
     // serve frontend from ../Frontend (same origin — no CORS)
@@ -101,11 +126,12 @@ export async function buildApp(){
     app.get("/health", async (_request, reply) => {
       const checks: Record<string, string> = Object.fromEntries([
         await dependencyCheck("postgres", () => prisma.$queryRaw`SELECT 1`),
-        await dependencyCheck("redis", () => redis.ping()),
+        await dependencyCheck("redis", () => redisCircuitBreaker.execute(() => redis.ping())),
       ]);
 
       const healthy = Object.values(checks).every((v) => v === "ok");
       const status = healthy ? 200 : 503;
+      if (!healthy) void notifyAlert("RAG ChatBot health degraded", { checks });
 
       return reply.status(status).send({
         status: healthy ? "ok" : "degraded",

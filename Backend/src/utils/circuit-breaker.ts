@@ -80,4 +80,25 @@ export class CircuitBreaker {
     this.cooldownMultiplier = 1;
     this.probing = false;
   }
+
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
+    if (!this.allowsRequest()) {
+      throw new CircuitOpenError();
+    }
+    try {
+      const result = await operation();
+      this.recordSuccess();
+      return result;
+    } catch (error) {
+      this.recordFailure();
+      throw error;
+    }
+  }
+}
+
+export class CircuitOpenError extends Error {
+  constructor() {
+    super("Service is temporarily unavailable. Please try again shortly.");
+    this.name = "CircuitOpenError";
+  }
 }

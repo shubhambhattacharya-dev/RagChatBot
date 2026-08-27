@@ -47,6 +47,16 @@ export { Prisma }
  */
 export type Document = Prisma.DocumentModel
 /**
+ * Model Conversation
+ * 
+ */
+export type Conversation = Prisma.ConversationModel
+/**
+ * Model ChatMessage
+ * 
+ */
+export type ChatMessage = Prisma.ChatMessageModel
+/**
  * Model Chunk
  * 
  */

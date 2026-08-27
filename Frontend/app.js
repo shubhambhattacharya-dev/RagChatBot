@@ -14,8 +14,23 @@ const isStaticDevServer = isLocalHost && location.port !== '3001';
 const localBackend = `http://${location.hostname || 'localhost'}:3001`;
 const API = configuredApi || (isStaticDevServer ? localBackend : '');
 
+const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const DOC_SCOPE_STORAGE_KEY = 'rag-chatbot-active-document-v1';
+let activeRequestController = null;
+
 function apiUrl(path) {
   return `${API}${path}`;
+}
+
+async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeout);
+  try {
+    return await fetch(url, { ...options, signal: options.signal || controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function humanizeError(error, fallback) {
@@ -23,9 +38,7 @@ function humanizeError(error, fallback) {
     return 'The server took too long to respond. Please try again.';
   }
   if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
-    return API
-      ? `Cannot reach the API at ${API}. Start the backend with "bun run dev" from the Backend folder.`
-      : 'Cannot reach the application server. Refresh the page and try again.';
+    return 'Cannot reach the application server. Refresh the page and try again.';
   }
   return error?.message || fallback;
 }
@@ -38,6 +51,25 @@ const state = {
   streaming: false,
   activeDocId: null,
 };
+
+function loadPersistedState() {
+  try {
+    state.history = [];
+    state.activeDocId = localStorage.getItem(DOC_SCOPE_STORAGE_KEY) || null;
+  } catch {
+    state.history = [];
+    state.activeDocId = null;
+  }
+}
+
+function persistState() {
+  try {
+    if (state.activeDocId) localStorage.setItem(DOC_SCOPE_STORAGE_KEY, state.activeDocId);
+    else localStorage.removeItem(DOC_SCOPE_STORAGE_KEY);
+  } catch {
+    // Storage can be disabled or full; the app remains usable in memory.
+  }
+}
 
 // ==================== DOM ====================
 const $ = (s, p = document) => p.querySelector(s);
@@ -61,10 +93,12 @@ function initDOM() {
   el.welcome = $('#welcomeScreen');
   el.toast = $('#toastContainer');
   el.attachBtn = $('#attachBtn');
+  el.stopBtn = $('#stopBtn');
   el.statusDot = $('#statusDot');
   el.statusLabel = $('#statusLabel');
 }
 initDOM();
+loadPersistedState();
 
 // ==================== UTILITIES ====================
 function escapeHTML(str) {
@@ -98,7 +132,7 @@ function toast(msg, type = 'success', duration = 3000) {
 // ==================== HEALTH ====================
 async function checkHealth() {
   try {
-    const r = await fetch(apiUrl('/health'), { signal: AbortSignal.timeout(4000) });
+    const r = await fetchWithTimeout(apiUrl('/health'), {}, 4000);
     if (r.ok) {
       el.statusDot.className = 'status-dot connected';
       el.statusLabel.textContent = 'Connected';
@@ -124,6 +158,7 @@ el.input.addEventListener('keydown', (e) => {
     sendMessage();
   }
 });
+el.sendBtn.addEventListener('click', sendMessage);
 
 // ==================== SIDEBAR MOBILE ====================
 el.menuBtn.addEventListener('click', () => toggleSidebar(true));
@@ -137,6 +172,12 @@ function toggleSidebar(open) {
 
 // ==================== UPLOAD ====================
 el.dropZone.addEventListener('click', () => el.fileInput.click());
+el.dropZone.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    el.fileInput.click();
+  }
+});
 
 el.dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
@@ -159,11 +200,22 @@ el.fileInput.addEventListener('change', () => {
 });
 
 el.attachBtn.addEventListener('click', () => el.fileInput.click());
+el.stopBtn.addEventListener('click', () => activeRequestController?.abort(new DOMException('Stopped by user', 'AbortError')));
 
 async function handleFiles(files) {
-  const validFiles = files.filter((f) =>
-    /\.(pdf|docx|txt|md)$/i.test(f.name)
-  );
+  const validFiles = files.filter((f) => {
+    const validExtension = /\.(pdf|docx|txt|md)$/i.test(f.name);
+    if (!validExtension) return false;
+    if (f.size > MAX_FILE_SIZE) {
+      toast(`${f.name} exceeds the 25 MB limit.`, 'error');
+      return false;
+    }
+    if (f.size === 0) {
+      toast(`${f.name} is empty.`, 'error');
+      return false;
+    }
+    return true;
+  });
 
   if (validFiles.length !== files.length) {
     toast('Some file types not supported. Use PDF, DOCX, TXT, MD.', 'error');
@@ -187,7 +239,7 @@ async function uploadFile(file) {
   const fd = new FormData();
   fd.append('file', file);
 
-  const res = await fetch(apiUrl('/upload'), { method: 'POST', body: fd });
+  const res = await fetchWithTimeout(apiUrl('/upload'), { method: 'POST', body: fd }, 120_000);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || body.message || 'Upload failed');
   return body;
@@ -228,7 +280,7 @@ async function pollStatus(docId, file) {
   for (let i = 0; i < 40; i++) {
     await sleep(2000);
     try {
-      const r = await fetch(apiUrl(`/document/${encodeURIComponent(docId)}`));
+      const r = await fetchWithTimeout(apiUrl(`/document/${encodeURIComponent(docId)}`), {}, 10_000);
       if (!r.ok) throw new Error('Unable to retrieve document status');
       const doc = await r.json();
       if (doc.status === 'READY' || doc.status === 'ready') {
@@ -253,12 +305,33 @@ async function pollStatus(docId, file) {
 // ==================== DOCUMENTS ====================
 async function loadDocs() {
   try {
-    const r = await fetch(apiUrl('/documents'));
+    const r = await fetchWithTimeout(apiUrl('/documents'), {}, 10_000);
     if (!r.ok) throw new Error('Failed to load documents');
     state.docs = await r.json();
     renderDocs();
-  } catch {
-    // Silent fail if offline
+  } catch (err) {
+    toast(humanizeError(err, 'Unable to load documents'), 'error');
+  }
+}
+
+async function loadRemoteHistory() {
+  try {
+    const r = await fetchWithTimeout(apiUrl('/conversations'), { credentials: 'same-origin' }, 10_000);
+    if (!r.ok) throw new Error('Unable to load conversation history');
+    const conversations = await r.json();
+    state.history = Array.isArray(conversations) ? conversations.map((conversation) => ({
+      question: conversation.messages?.find((message) => message.role === 'user')?.content || 'Conversation',
+      timestamp: Date.parse(conversation.updatedAt || conversation.createdAt) || Date.now(),
+      messages: (conversation.messages || []).map((message) => ({
+        role: message.role,
+        content: message.content,
+        sources: Array.isArray(message.sources) ? message.sources : [],
+      })),
+    })) : [];
+    persistState();
+    renderHistory();
+  } catch (err) {
+    console.warn('Remote history unavailable', err);
   }
 }
 
@@ -298,6 +371,7 @@ function renderDocs() {
     item.addEventListener('click', (e) => {
       if (e.target.closest('.doc-delete')) return;
       state.activeDocId = doc.id;
+      persistState();
       renderDocs();
       toast(`Scope: ${doc.filename}`, 'success', 1500);
     });
@@ -306,7 +380,7 @@ function renderDocs() {
       e.stopPropagation();
       if (!confirm(`Delete "${doc.filename}"?`)) return;
       try {
-        const r = await fetch(apiUrl(`/document/${encodeURIComponent(doc.id)}`), { method: 'DELETE' });
+        const r = await fetchWithTimeout(apiUrl(`/document/${encodeURIComponent(doc.id)}`), { method: 'DELETE' }, 15_000);
         if (!r.ok) throw new Error('Delete failed');
         if (state.activeDocId === doc.id) state.activeDocId = null;
         await loadDocs();
@@ -351,21 +425,29 @@ async function sendMessage() {
 
 async function streamResponse(question, typingEl) {
   const docParam = state.activeDocId ? `&documentId=${state.activeDocId}` : '';
-  const res = await fetch(apiUrl(`/chat?question=${encodeURIComponent(question)}${docParam}`));
+  activeRequestController = new AbortController();
+  const timeout = setTimeout(() => activeRequestController.abort(new DOMException('Stream timed out', 'TimeoutError')), 120_000);
+  el.stopBtn.hidden = false;
 
-  if (!res.ok) {
+  try {
+    const res = await fetch(apiUrl(`/chat?question=${encodeURIComponent(question)}${docParam}`), {
+      signal: activeRequestController.signal,
+      headers: { Accept: 'text/event-stream' },
+    });
+
+    if (!res.ok) {
+      typingEl.remove();
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || body.message || `Server returned ${res.status}`);
+    }
+    if (!res.body) throw new Error('The server returned an empty response stream');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let text = '';
+    let sources = [];
     typingEl.remove();
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.message || `Server returned ${res.status}`);
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  let text = '';
-  let sources = [];
-
-  typingEl.remove();
 
   // Create message shell
   const bubble = document.createElement('div');
@@ -387,39 +469,47 @@ async function streamResponse(question, typingEl) {
   el.messages.appendChild(bubble);
   scrollBottom();
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop() || '';
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
 
-    for (const line of lines) {
-      const t = line.trim();
-      if (!t || !t.startsWith('data: ')) continue;
-      const data = t.slice(6);
-      if (data === '[DONE]') continue;
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t || !t.startsWith('data: ')) continue;
+        const data = t.slice(6);
+        if (data === '[DONE]') continue;
 
-      try {
-        const p = JSON.parse(data);
-        if (p.type === 'status' && p.message) {
-          if (statusMsg) statusMsg.textContent = p.message;
+        try {
+          const p = JSON.parse(data);
+          if (p.type === 'error') throw new Error(p.message || 'The server reported a streaming error');
+          if (p.type === 'status' && p.message && statusMsg) statusMsg.textContent = p.message;
+          if (p.type === 'token' && p.content) {
+            if (statusCard) statusCard.style.display = 'none';
+            text += p.content;
+            content.innerHTML = renderMD(text);
+            scrollBottom();
+          }
+          if (p.type === 'sources' && Array.isArray(p.documents)) sources = p.documents;
+        } catch (err) {
+          let serverError = false;
+          try { serverError = JSON.parse(data)?.type === 'error'; } catch { /* malformed event */ }
+          if (serverError) throw err;
+          console.warn('Skipped malformed SSE event');
         }
-        if (p.type === 'token' && p.content) {
-          if (statusCard) statusCard.style.display = 'none';
-          text += p.content;
-          content.innerHTML = renderMD(text);
-          scrollBottom();
-        }
-        if (p.type === 'sources' && p.documents) {
-          sources = p.documents;
-        }
-      } catch {
-        /* skip malformed */
       }
     }
-  }
+
+    if (buf.trim().startsWith('data: ')) {
+      try {
+        const p = JSON.parse(buf.trim().slice(6));
+        if (p.type === 'token' && p.content) text += p.content;
+        if (p.type === 'sources' && Array.isArray(p.documents)) sources = p.documents;
+      } catch { /* Ignore an incomplete final event. */ }
+    }
 
   if (statusCard) statusCard.style.display = 'none';
   content.innerHTML = renderMD(text);
@@ -439,7 +529,21 @@ async function streamResponse(question, typingEl) {
 
   state.messages.push({ role: 'user', content: question });
   state.messages.push({ role: 'assistant', content: text, sources });
+  state.history.push({
+    question,
+    timestamp: Date.now(),
+    messages: [
+      { role: 'user', content: question },
+      { role: 'assistant', content: text, sources },
+    ],
+  });
+  persistState();
   addHistoryItem(question);
+  } finally {
+    clearTimeout(timeout);
+    el.stopBtn.hidden = true;
+    activeRequestController = null;
+  }
 }
 
 // ==================== UI HELPERS ====================
@@ -482,7 +586,8 @@ function addTypingBubble() {
 }
 
 // ==================== HISTORY ====================
-function addHistoryItem(question) {
+function addHistoryItem(entry) {
+  const question = typeof entry === 'string' ? entry : entry.question;
   const empty = el.historyList.querySelector('.empty-state');
   if (empty) empty.remove();
 
@@ -504,16 +609,43 @@ function addHistoryItem(question) {
     <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(question.slice(0, 40))}${question.length > 40 ? '…' : ''}</span>
   `;
   item.addEventListener('click', () => {
-    el.messages.scrollTo({ top: 0, behavior: 'smooth' });
+    if (entry.messages?.length) {
+      $$('.message', el.messages).forEach((m) => m.remove());
+      removeWelcome();
+      entry.messages.forEach((message) => addMessageBubble(message.content, message.role));
+    }
   });
   el.historyList.appendChild(item);
 }
 
+function renderHistory() {
+  el.historyList.innerHTML = '';
+  if (!state.history.length) {
+    el.historyList.innerHTML = '<div class="empty-state">No conversations recorded</div>';
+    return;
+  }
+  state.history.forEach((entry) => addHistoryItem(entry));
+}
+
 // ==================== CLEAR ====================
 el.clearBtn.addEventListener('click', () => {
+  if (state.streaming) return;
   $$('.message', el.messages).forEach((m) => m.remove());
   state.messages = [];
-  location.reload();
+  state.history = [];
+  persistState();
+  el.historyList.innerHTML = '<div class="empty-state">No conversations yet</div>';
+  state.activeDocId = null;
+  if (!el.welcome) {
+    el.messages.insertAdjacentHTML('afterbegin', `
+      <div class="welcome-screen" id="welcomeScreen">
+        <h1>Ask your documents anything</h1>
+      </div>`);
+    el.welcome = $('#welcomeScreen');
+  }
+  el.input.focus();
+  fetchWithTimeout(apiUrl('/conversations'), { method: 'DELETE', credentials: 'same-origin' }, 10_000)
+    .catch((err) => console.warn('Unable to clear remote history', err));
 });
 
 // ==================== MARKDOWN RENDERER ====================
@@ -580,4 +712,6 @@ function renderMD(text) {
 
 // ==================== BOOT ====================
 loadDocs();
+loadRemoteHistory();
+renderHistory();
 console.log('✨ RAG ChatBot application initialized');

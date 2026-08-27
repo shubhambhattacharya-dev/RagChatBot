@@ -6,7 +6,7 @@ import { env } from "../../config/env";
 import { minio } from "../../config/minio";
 import prisma from "../../config/prisma";
 
-import { documentQueue } from "../../config/redis";
+import { enqueueDocument } from "../../config/redis";
 
 // Whitelist: extension → expected MIME (check both — never trust just one)
 const ALLOWED_TYPES: Record<string, string> = {
@@ -108,7 +108,7 @@ export async function handleUpload(
 
     // 6. Persist work in Redis so a web-server restart cannot abandon indexing.
     try {
-      await documentQueue.add("index-document", { documentId, fileKey }, { jobId: documentId });
+      await enqueueDocument(documentId, fileKey);
     } catch (error) {
       await prisma.document.delete({ where: { id: documentId } }).catch(() => undefined);
       await minio.removeObject(env.MINIO_BUCKET, fileKey).catch(() => undefined);

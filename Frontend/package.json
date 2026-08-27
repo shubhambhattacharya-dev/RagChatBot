@@ -1,0 +1,20 @@
+{
+  "name": "rag-chatbot-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "npm run lint && npm run test",
+    "lint": "eslint app.js tests",
+    "test": "node --test tests/smoke.node.js",
+    "test:e2e": "playwright test",
+    "syntax": "node --check app.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "eslint": "^9.0.0"
+  },
+  "dependencies": {
+    "ragchatbot": "file:.."
+  }
+}

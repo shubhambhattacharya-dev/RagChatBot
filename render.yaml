@@ -19,8 +19,10 @@ services:
         value: info
       - key: DATABASE_URL
         sync: false                      # paste Supabase connection string (URI)
+      - key: SESSION_SECRET
+        sync: false                      # generate a unique random value (32+ chars)
       - key: REDIS_URL
-        value: redis://localhost:6379   # in-container Redis, started by the Dockerfile CMD.
+        sync: false                      # Configure a managed, persistent Redis instance.
                                         # IMPORTANT: remove any external REDIS_URL override
                                         # (e.g. Upstash) from the Render dashboard — BullMQ's
                                         # worker polling burns Upstash's free 500k req/month

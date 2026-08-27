@@ -7,24 +7,26 @@ import { chunkText, detectDocumentOwner, enrichChunks, getChunkMetadata } from "
 import { embedBatch, embedText } from "../../provider/embedding/gemini";
 import { extractText } from "../../services/document/extract";
 import { markDeadLetter, classifyError } from "./dead-letter";
+import { databaseCircuitBreaker, storageCircuitBreaker } from "../../utils/resilience";
+import { withSpan } from "../../observability";
 
-export async function processDocument(
+async function processDocumentInternal(
   documentId: string,
   fileKey: string
 ): Promise<void> {
   try {
     logger.info({ documentId }, "Processing document");
 
-    const document = await prisma.document.findUnique({
+    const document = await databaseCircuitBreaker.execute(() => withSpan("db.document_lookup", { "db.operation": "findUnique" }, () => prisma.document.findUnique({
       where: { id: documentId },
       select: { filename: true, mimeType: true },
-    });
+    })));
     if (!document) return;
 
-    await prisma.document.update({ where: { id: documentId }, data: { status: "PROCESSING" } });
-    await prisma.chunk.deleteMany({ where: { documentId } });
+    await databaseCircuitBreaker.execute(() => withSpan("db.document_status", { "db.operation": "update" }, () => prisma.document.update({ where: { id: documentId }, data: { status: "PROCESSING" } })));
+    await databaseCircuitBreaker.execute(() => withSpan("db.chunk_delete", { "db.operation": "deleteMany" }, () => prisma.chunk.deleteMany({ where: { documentId } })));
 
-    const buffer = await minio.getObject(env.MINIO_BUCKET, fileKey);
+    const buffer = await storageCircuitBreaker.execute(() => minio.getObject(env.MINIO_BUCKET, fileKey));
 
     const text = await extractText(buffer, document.mimeType, document.filename);
 
@@ -53,20 +55,20 @@ export async function processDocument(
       const vector = `[${embedding.join(",")}]`; // pgvector format
       const metadata = JSON.stringify(getChunkMetadata(chunks[index]!, filename, owner));
 
-      await prisma.$executeRaw`
+      await databaseCircuitBreaker.execute(() => withSpan("db.chunk_insert", { "db.operation": "insert" }, () => prisma.$executeRaw`
         INSERT INTO "Chunk" ("id", "documentId", "chunkIndex", "content", "embedding", "metadata", "createdAt")
         VALUES (gen_random_uuid(), ${documentId}, ${index}, ${chunk.content}, ${vector}::vector, ${metadata}::jsonb, NOW())
-      `;
+      `));
     }
 
-    await prisma.document.update({
+    await databaseCircuitBreaker.execute(() => withSpan("db.document_ready", { "db.operation": "update" }, () => prisma.document.update({
       where: {
         id: documentId,
       },
       data: {
         status: "READY",
       },
-    });
+    })));
 
     logger.info({ documentId, chunks: chunks.length }, "Document indexed successfully");
   } catch (error) {
@@ -77,4 +79,8 @@ export async function processDocument(
 
     throw error;
   }
+}
+
+export function processDocument(documentId: string, fileKey: string): Promise<void> {
+  return withSpan("document.process", { "document.id": documentId }, () => processDocumentInternal(documentId, fileKey));
 }

@@ -16,6 +16,9 @@ vi.mock("../../src/config/prisma", () => ({
 }));
 
 vi.mock("../../src/config/redis", () => ({
+  enqueueDocument: vi.fn((documentId: string, fileKey: string) =>
+    documentQueue.add("index-document", { documentId, fileKey }, { jobId: documentId })
+  ),
   documentQueue: {
     add: vi.fn().mockResolvedValue({}),
   },

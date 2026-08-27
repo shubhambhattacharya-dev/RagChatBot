@@ -85,8 +85,8 @@ export async function retryDeadLetter(documentId: string): Promise<{ requeued: b
   if (doc.status !== "FAILED") return { requeued: false, reason: `Document status is ${doc.status}, not FAILED` };
 
   try {
-    const { documentQueue } = await import("../../config/redis");
-    await documentQueue.add("index-document", { documentId: doc.id, fileKey: doc.fileKey }, { jobId: doc.id });
+    const { enqueueDocument } = await import("../../config/redis");
+    await enqueueDocument(doc.id, doc.fileKey);
     await prisma.document.update({ where: { id: documentId }, data: { status: "QUEUED" } });
     logger.info({ documentId }, "♻️ Dead-letter document re-queued for processing");
     return { requeued: true };

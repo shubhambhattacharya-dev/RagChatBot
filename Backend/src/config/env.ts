@@ -14,12 +14,20 @@ export const EnvSchema=z.object({
     MINIO_SECRET_KEY:z.string().default(""),
     MINIO_BUCKET: z.string().default("rag-files"),
     CORS_ORIGIN: z.string().default(""),
+    SESSION_SECRET: z.string().default("development-only-change-this-session-secret"),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(120),
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().max(3_600_000).default(60_000),
     LANGFUSE_PUBLIC_KEY: z.string().default(""),
     LANGFUSE_SECRET_KEY: z.string().default(""),
     LANGFUSE_BASE_URL: z.string().url().default("https://cloud.langfuse.com"),
+    LANGFUSE_ENVIRONMENT: z.string().default(""),
+    OTEL_SERVICE_NAME: z.string().default("rag-chatbot"),
+    JAEGER_ENDPOINT: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+    METRICS_ENABLED: z.preprocess((value) => value === undefined || value === "" ? true : value === true || value === "true" || value === "1", z.boolean()).default(true),
+    ALERT_WEBHOOK_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+    CHAT_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(30),
+    UPLOAD_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(10),
 })
 
 const Parsed=EnvSchema.safeParse(process.env);
@@ -38,6 +46,9 @@ export function assertRuntimeConfig(): void {
     "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
   ] as const;
   const missing = required.filter((key) => !env[key].trim());
+  if (env.NODE_ENV === "production" && (env.SESSION_SECRET.length < 32 || env.SESSION_SECRET.startsWith("development-only"))) {
+    throw new Error("SESSION_SECRET must be a unique random value of at least 32 characters in production");
+  }
   if (missing.length > 0) {
     throw new Error(`Missing required runtime configuration: ${missing.join(", ")}`);
   }

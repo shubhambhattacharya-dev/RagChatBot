@@ -1,5 +1,7 @@
 import { env } from "../../config/env";
 import logger from "../../logger";
+import { withSpan } from "../../observability";
+import { embeddingCircuitBreaker } from "../../utils/resilience";
 
 const EMBED_MODEL = "models/gemini-embedding-001";
 const API_URL = "https://generativelanguage.googleapis.com/v1beta";
@@ -104,14 +106,15 @@ export async function embedText(
   const maxRetries = 3;
   let lastError: Error | null = null;
 
+  return embeddingCircuitBreaker.execute(async () => {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetch(
-        `${API_URL}/${EMBED_MODEL}:embedContent?key=${env.GEMINI_API}`,
+      const response = await withSpan("embedding.gemini.request", { "gen_ai.system": "google_generativeai", "gen_ai.request.model": EMBED_MODEL }, () => fetch(
+        `${API_URL}/${EMBED_MODEL}:embedContent`,
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API,
           },
           body: JSON.stringify({
             model: EMBED_MODEL,
@@ -125,7 +128,7 @@ export async function embedText(
             ? AbortSignal.any([signal, AbortSignal.timeout(env.REQUEST_TIMEOUT_MS)])
             : AbortSignal.timeout(env.REQUEST_TIMEOUT_MS),
         }
-      );
+      ));
 
       if (response.status === 429) {
         const errorBody = await response.text();
@@ -189,6 +192,7 @@ export async function embedText(
     throw new Error("Gemini API rate limit exceeded. Please try again later.");
   }
   throw new Error(`Gemini embedding failed: ${error?.message || error}`);
+  });
 }
 
 function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
@@ -258,11 +262,11 @@ export async function embedBatch(
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const response = await fetch(
-          `${API_URL}/${EMBED_MODEL}:batchEmbedContents?key=${env.GEMINI_API}`,
+        const response = await withSpan("embedding.gemini.batch", { "gen_ai.system": "google_generativeai", "gen_ai.request.model": EMBED_MODEL }, () => fetch(
+          `${API_URL}/${EMBED_MODEL}:batchEmbedContents`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API },
             body: JSON.stringify({
               requests: batchSlice.map((t) => ({
                 model: EMBED_MODEL,
@@ -275,7 +279,7 @@ export async function embedBatch(
               ? AbortSignal.any([signal, AbortSignal.timeout(env.REQUEST_TIMEOUT_MS)])
               : AbortSignal.timeout(env.REQUEST_TIMEOUT_MS),
           }
-        );
+        ));
 
         if (response.status === 429) {
           const errorBody = await response.text();

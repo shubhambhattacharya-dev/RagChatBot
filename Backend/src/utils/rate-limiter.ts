@@ -1,3 +1,7 @@
+import type { Redis } from "ioredis";
+import { redisCircuitBreaker } from "./resilience";
+import { withSpan } from "../observability";
+
 export interface RateLimiterOptions {
   maxRequests: number;
   windowMs: number;
@@ -65,26 +69,57 @@ export class RateLimiter {
   }
 }
 
-export function rateLimit(opts: RateLimiterOptions) {
-  const limiter = new RateLimiter(opts);
+export class RedisSlidingWindowRateLimiter {
+  constructor(private readonly redis: Redis, private readonly options: RateLimiterOptions) {}
+
+  async check(key: string): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> {
+    const now = Date.now();
+    const redisKey = `ratelimit:${key}`;
+    // One Lua transaction makes the trim/count/add sequence safe across replicas.
+    const result = await redisCircuitBreaker.execute(() => withSpan("redis.rate_limit", { "db.operation": "sliding_window" }, () => this.redis.eval(
+      `local cutoff = tonumber(ARGV[1]) - tonumber(ARGV[2])
+       redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', cutoff)
+       local count = redis.call('ZCARD', KEYS[1])
+       if count >= tonumber(ARGV[3]) then
+         local first = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+         return {0, 0, tonumber(first[2]) + tonumber(ARGV[2]) - tonumber(ARGV[1])}
+       end
+       redis.call('ZADD', KEYS[1], ARGV[1], ARGV[4])
+       redis.call('PEXPIRE', KEYS[1], ARGV[2])
+       return {1, tonumber(ARGV[3]) - count - 1, 0}`,
+      1,
+      redisKey,
+      now,
+      this.options.windowMs,
+      this.options.maxRequests,
+      `${now}:${crypto.randomUUID()}`,
+    ) as Promise<[number, number, number]>));
+
+    return { allowed: result[0] === 1, remaining: Number(result[1]), retryAfterMs: Math.max(Number(result[2]), 0) };
+  }
+}
+
+export function rateLimit(opts: RateLimiterOptions & { redis?: Redis }) {
+  const limiter = opts.redis ? new RedisSlidingWindowRateLimiter(opts.redis, opts) : new RateLimiter(opts);
 
   return async function rateLimitHandler(request: any, reply: any) {
     const ip = request.ip || request.socket?.remoteAddress || "unknown";
-    const { allowed, remaining, retryAfterMs } = limiter.check(ip);
+    const { allowed, remaining, retryAfterMs } = await limiter.check(ip);
 
     reply.header("RateLimit-Limit", opts.maxRequests);
     reply.header("RateLimit-Remaining", remaining);
 
     if (!allowed) {
+      const retryAfter = Math.max(1, Math.ceil(retryAfterMs / 1000));
       reply.hijack();
-      reply.raw.writeHead(429, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
-        "RateLimit-Limit": String(opts.maxRequests),
-        "RateLimit-Remaining": "0",
-        "RateLimit-Reset": String(Math.ceil(retryAfterMs / 1000)),
-      });
+      reply.raw.statusCode = 429;
+      reply.raw.setHeader("Content-Type", "application/json; charset=utf-8");
+      reply.raw.setHeader("Retry-After", String(retryAfter));
+      reply.raw.setHeader("RateLimit-Limit", String(opts.maxRequests));
+      reply.raw.setHeader("RateLimit-Remaining", "0");
+      reply.raw.setHeader("RateLimit-Reset", String(Math.ceil((Date.now() + retryAfterMs) / 1000)));
       reply.raw.end(JSON.stringify({ message: "Too many requests. Please slow down.", retryAfterMs }));
+      return;
     }
   };
 }

@@ -3,9 +3,25 @@ type Chunk = {
   content: string;
 };
 
+export function estimateTokens(text: string): number {
+  // Character/byte ratios vary substantially by script. This intentionally
+  // overestimates non-Latin text so chunks stay safely inside model limits.
+  let cjk = 0;
+  let indic = 0;
+  let arabic = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if ((code >= 0x3400 && code <= 0x9fff) || (code >= 0x3040 && code <= 0x30ff) || (code >= 0xac00 && code <= 0xd7af)) cjk++;
+    else if ((code >= 0x0900 && code <= 0x0d7f)) indic++;
+    else if ((code >= 0x0600 && code <= 0x06ff)) arabic++;
+  }
+  const utf8Bytes = new TextEncoder().encode(text).length;
+  const scriptEstimate = cjk * 1.5 + indic + arabic * 0.8;
+  return Math.max(1, Math.ceil(Math.max(utf8Bytes / 4, scriptEstimate)));
+}
+
 function tokenCount(text: string): number {
-  // Rough estimate (replace with tiktoken later)
-  return Math.ceil(text.length / 4);
+  return estimateTokens(text);
 }
 
 /* -------------------- Splitters -------------------- */

@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 import { env } from "../../config/env";
 import logger from "../../logger";
+import { withSpan } from "../../observability";
+import { llmCircuitBreaker } from "../../utils/resilience";
 
 export const groq = new OpenAI({
   // The application validates the real key at startup. A non-secret placeholder
@@ -138,7 +140,7 @@ async function* streamFromGeminiModel(
       parts: [{ text: m.content as string }],
     }));
 
-  const url = `${GEMINI_API_URL}/models/${modelName}:streamGenerateContent?alt=sse&key=${env.GEMINI_API}`;
+  const url = `${GEMINI_API_URL}/models/${modelName}:streamGenerateContent?alt=sse`;
   const body = JSON.stringify({
     systemInstruction: { parts: systemParts },
     contents,
@@ -153,14 +155,14 @@ async function* streamFromGeminiModel(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (signal?.aborted) throw new Error("Request aborted.");
 
-    const response = await fetch(url, {
+    const response = await withSpan("llm.gemini.request", { "gen_ai.system": "google_generativeai", "gen_ai.request.model": modelName }, () => fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API },
       body,
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(env.REQUEST_TIMEOUT_MS)])
         : AbortSignal.timeout(env.REQUEST_TIMEOUT_MS),
-    });
+    }));
 
     if (response.status === 429) {
       const errorBody = await response.text();
@@ -331,14 +333,17 @@ async function* streamFrom(
   maxTokens = 1024,
   usageRef?: { current: TokenUsage | null }
 ): AsyncGenerator<string> {
-  const stream = await client.chat.completions.create({
+  const stream = await llmCircuitBreaker.execute(() => withSpan("llm.groq.request", {
+    "gen_ai.system": "groq",
+    "gen_ai.request.model": model,
+  }, () => client.chat.completions.create({
     model,
     messages,
     stream: true,
     stream_options: { include_usage: true },
     temperature: 0.2,
     max_tokens: maxTokens,
-  }, { signal });
+  }, { signal })));
 
   for await (const chunk of stream) {
     // Content tokens
