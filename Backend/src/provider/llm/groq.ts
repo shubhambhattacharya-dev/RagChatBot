@@ -15,9 +15,9 @@ export const groq = new OpenAI({
 const MAX_CONTEXT_CHUNKS = 8;
 
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta";
-// gemini-2.5-flash: best price-performance, free tier available.
-// Fallback chain: 2.5-flash → 3.5-flash (if user has newer API access).
-const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
+// Keep a current, stable generation fallback. The legacy 2.5 Flash model was
+// removed for new API accounts, so it must not be part of a production chain.
+const GEMINI_MODELS = ["gemini-3.7-flash", "gemini-3.6-flash"];
 
 // Retry config for rate-limited APIs
 const MAX_RETRIES = 3;
@@ -259,9 +259,9 @@ export async function* streamChat(
   // append a complete duplicate answer to the client's partial response.
   let emittedToken = false;
   const GROQ_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "mixtral-8x7b-32768",
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-20b",
   ];
   let GROQ_MODEL = GROQ_MODELS[0]!;
   // Try each Groq model in order until one works

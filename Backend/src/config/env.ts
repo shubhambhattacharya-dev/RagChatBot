@@ -14,6 +14,12 @@ export const EnvSchema=z.object({
     MINIO_SECRET_KEY:z.string().default(""),
     MINIO_BUCKET: z.string().default("rag-files"),
     CORS_ORIGIN: z.string().default(""),
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(120),
+    RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().max(3_600_000).default(60_000),
+    LANGFUSE_PUBLIC_KEY: z.string().default(""),
+    LANGFUSE_SECRET_KEY: z.string().default(""),
+    LANGFUSE_BASE_URL: z.string().url().default("https://cloud.langfuse.com"),
 })
 
 const Parsed=EnvSchema.safeParse(process.env);

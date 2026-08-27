@@ -14,10 +14,15 @@ import { createWorker, documentQueue, redis } from "./config/redis";
 import prisma from "./config/prisma";
 import { processDocument } from "./modules/upload/processor";
 import { withTimeout } from "./utils/timeout";
+import { rateLimit } from "./utils/rate-limiter";
 
 /** A slow dependency must never hang /health — the UI status dot and Render's
  *  own health checks both depend on it answering quickly. */
 const HEALTH_CHECK_TIMEOUT_MS = 3_000;
+const requestRateLimit = rateLimit({
+  maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+});
 
 async function dependencyCheck(
   label: string,
@@ -33,7 +38,7 @@ async function dependencyCheck(
 
 export async function buildApp(){
     assertRuntimeConfig();
-    const app=fastify({logger:{level:env.LOG_LEVEL}})
+    const app=fastify({logger:{level:env.LOG_LEVEL}, trustProxy: env.NODE_ENV === "production"})
     const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
     const documentWorker = createWorker("document-processing", async (job) => {
       await processDocument(job.data.documentId, job.data.fileKey);
@@ -76,6 +81,10 @@ export async function buildApp(){
       methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
     })
     await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
+    app.addHook("onRequest", async (request, reply) => {
+      if (request.url.startsWith("/health")) return;
+      return requestRateLimit(request, reply);
+    });
     // serve frontend from ../Frontend (same origin — no CORS)
     await app.register(staticFiles, {
       root: fileURLToPath(new URL("../../Frontend", import.meta.url)),

@@ -1,5 +1,4 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { randomUUID } from "node:crypto";
 import prisma from "../../config/prisma";
 import { embedText } from "../../provider/embedding/gemini";
 import { streamChat, type TokenUsage } from "../../provider/llm/groq";
@@ -17,8 +16,6 @@ import {
   TOP_K,
 } from "./retrieval";
 
-const SESSION_COOKIE = "rag_session_id";
-
 const ChatQuerySchema = z.object({
   question: z.string().min(1, "Question is required").max(5000, "Question too long"),
   documentId: z.string().uuid().optional(),
@@ -31,7 +28,7 @@ const ChatBodySchema = z.object({
 
 const CHAT_TIMEOUT_MS = 60_000;
 
-async function handleChat(question: string, reply: FastifyReply, documentId?: string, sessionId?: string) {
+async function handleChat(question: string, reply: FastifyReply, documentId?: string) {
   setupSSE(reply);
   const abortController = new AbortController();
   const onDisconnect = () => abortController.abort();
@@ -206,20 +203,6 @@ Ask me any question about your uploaded documents.
   }
 }
 
-function getOrCreateSessionId(request: any, reply: FastifyReply): string {
-  const existing = request.cookies?.[SESSION_COOKIE];
-  if (existing && typeof existing === "string") return existing;
-
-  const sessionId = randomUUID();
-  reply.setCookie(SESSION_COOKIE, sessionId, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
-  });
-  return sessionId;
-}
-
 export async function chatRoutes(app: FastifyInstance) {
   app.get("/chat", async (request, reply) => {
     const parsed = ChatQuerySchema.safeParse(request.query);
@@ -229,8 +212,7 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
     const { question, documentId } = parsed.data;
-    const sessionId = getOrCreateSessionId(request, reply);
-    return handleChat(question, reply, documentId, sessionId);
+    return handleChat(question, reply, documentId);
   });
 
   app.post("/chat", async (request, reply) => {
@@ -241,7 +223,6 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
     const { question, documentId } = parsed.data;
-    const sessionId = getOrCreateSessionId(request, reply);
-    return handleChat(question, reply, documentId, sessionId);
+    return handleChat(question, reply, documentId);
   });
 }
