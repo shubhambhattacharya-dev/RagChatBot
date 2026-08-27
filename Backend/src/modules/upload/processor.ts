@@ -2,7 +2,6 @@ import { minio } from "../../config/minio";
 import { env } from "../../config/env";
 import prisma from "../../config/prisma";
 import logger from "../../logger";
-import { traceDocumentProcessing, flushLangfuse } from "../../config/langfuse";
 
 import { chunkText, detectDocumentOwner, enrichChunks, getChunkMetadata } from "../../utils/chunking";
 import { embedBatch, embedText } from "../../provider/embedding/gemini";
@@ -15,11 +14,6 @@ export async function processDocument(
 ): Promise<void> {
   try {
     logger.info({ documentId }, "Processing document");
-
-    const trace = await traceDocumentProcessing({
-      documentId,
-      filename: fileKey.split("/").pop() ?? fileKey,
-    });
 
     const document = await prisma.document.findUnique({
       where: { id: documentId },
@@ -75,14 +69,6 @@ export async function processDocument(
     });
 
     logger.info({ documentId, chunks: chunks.length }, "Document indexed successfully");
-
-    if (trace) {
-      trace.update({
-        output: { chunks: chunks.length, owner },
-        metadata: { status: "READY" },
-      });
-    }
-    await flushLangfuse();
   } catch (error) {
     const { reason, retryable } = classifyError(error);
     logger.error({ documentId, err: error, reason, retryable }, "Failed to process document");

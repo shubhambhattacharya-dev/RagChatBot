@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Typecheck and offline tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - run: bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat
+
+  deployment-smoke:
+    name: Production health smoke test
+    needs: quality
+    if: vars.PRODUCTION_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed health endpoint
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          curl --fail --show-error --retry 3 --retry-delay 5 "${PRODUCTION_URL%/}/health" | grep -q '"status":"ok"'
+
+  live-provider-smoke:
+    name: Live provider smoke tests
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Run live provider tests when secrets are configured
+        env:
+          GEMINI_API: ${{ secrets.GEMINI_API }}
+          GROQ_API: ${{ secrets.GROQ_API }}
+          RUN_LIVE_EMBEDDING_TESTS: "1"
+          RUN_LIVE_LLM_TESTS: "1"
+        run: |
+          if [ -z "$GEMINI_API" ] || [ -z "$GROQ_API" ]; then
+            echo "Live provider secrets are not configured; skipping."
+            exit 0
+          fi
+          bun test tests/embedding/embedding.test.ts tests/llm/llm.test.ts

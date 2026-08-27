@@ -6,8 +6,6 @@ import staticFiles from '@fastify/static'
 import { fileURLToPath } from "node:url";
 import {env, assertRuntimeConfig} from './config/env'
 import logger from './logger'
-import { startInstrumentation, shutdownInstrumentation, langfuseEnabled } from './instrumentation'
-import { flushLangfuse } from './config/langfuse'
 import { ensureBucket } from "./config/minio";
 import { uploadRoutes } from "./modules/upload/router";
 import { statusRoutes } from "./modules/upload/status";
@@ -35,12 +33,6 @@ async function dependencyCheck(
 
 export async function buildApp(){
     assertRuntimeConfig();
-    // OTel MUST be initialized before any HTTP clients (OpenAI SDK, fetch).
-    // This is a no-op when Langfuse env vars are empty.
-    startInstrumentation();
-    // Fastify 5 requires a config object, not a pino instance.
-    // request.log gets request-scoped fields (request-id, method, url) automatically.
-    // Non-request code (worker, embedding, startup) imports logger.ts directly.
     const app=fastify({logger:{level:env.LOG_LEVEL}})
     const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
     const documentWorker = createWorker("document-processing", async (job) => {
@@ -76,9 +68,6 @@ export async function buildApp(){
       await documentQueue.close();
       await redis.quit();
       await prisma.$disconnect();
-      // Flush any buffered Langfuse events before the process exits.
-      await flushLangfuse();
-      await shutdownInstrumentation();
     });
     //plugin — configurable CORS origin (default: true for dev, set CORS_ORIGIN in prod)
     await app.register(cookie)
@@ -124,8 +113,20 @@ return app;
 }
 
 const app=await buildApp();
-await app.listen({port:env.PORT,host:"0.0.0.0"});
-logger.info(`🚀 Server running on http://localhost:${env.PORT}${langfuseEnabled ? " (Langfuse tracing enabled)" : ""}`);
+
+async function startServer(port: number): Promise<void> {
+  try {
+    await app.listen({ port, host: "0.0.0.0" });
+    console.log(`🚀 Server running on http://localhost:${port}`);
+  } catch (err: any) {
+    if (err.code === "EADDRINUSE") {
+      throw new Error(`Port ${port} is already in use. Stop the existing process or choose a different PORT.`);
+    }
+    throw err;
+  }
+}
+
+await startServer(env.PORT);
 
 //graceful shutdown
 

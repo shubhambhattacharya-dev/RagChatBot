@@ -5,17 +5,16 @@ import { embedText } from "../../provider/embedding/gemini";
 import { streamChat, type TokenUsage } from "../../provider/llm/groq";
 import { setupSSE, sendSSE, sendSSEDone } from "../../utils/sse";
 import logger from "../../logger";
-import { traceRagQuery, traceRetrieval, traceGeneration, flushLangfuse } from "../../config/langfuse";
 import { z } from "zod";
 import {
+  buildDocFilter,
+  buildLexicalTsQuery,
   expandQuery,
   getPersonLookupTerm,
-  buildLexicalTsQuery,
-  buildDocFilter,
-  mergeRetrievalResults,
-  TOP_K,
   MAX_DISTANCE,
+  mergeRetrievalResults,
   type SearchResult,
+  TOP_K,
 } from "./retrieval";
 
 const SESSION_COOKIE = "rag_session_id";
@@ -70,8 +69,6 @@ Ask me any question about your uploaded documents.
   try {
     const startTime = Date.now();
     const expandedQuestion = expandQuery(question);
-
-    const trace = await traceRagQuery({ question, documentId, sessionId });
 
     logger.info({ question, expanded: expandedQuestion, scope: documentId || "GLOBAL" }, "📥 Query received");
 
@@ -147,14 +144,6 @@ Ask me any question about your uploaded documents.
       "📊 Retrieval complete"
     );
 
-    await traceRetrieval(trace, {
-      chunksFound: relevant.length,
-      topDistance: rows[0] ? Number(rows[0].distance) : 0,
-      latencyMs: Date.now() - startTime,
-      query: expandedQuestion,
-      sourceDocuments: sourceDocs,
-    });
-
     sendSSE(reply, {
       type: "status",
       step: "retrieval_complete",
@@ -177,14 +166,6 @@ Ask me any question about your uploaded documents.
     });
 
     const usageRef: { current: TokenUsage | null } = { current: null };
-    const genSpan = await traceGeneration(trace, {
-      model: "llama-3.1-8b-instant",
-      input: [
-        { role: "system", content: `Retrieved ${contextChunks.length} chunks from ${sourceDocs.join(", ") || "documents"}` },
-        { role: "user", content: question },
-      ],
-    });
-
     let fullAnswer = "";
     for await (const token of streamChat(question, contextChunks, abortController.signal, usageRef)) {
       if (reply.raw.destroyed) break;
@@ -193,14 +174,6 @@ Ask me any question about your uploaded documents.
         type: "token",
         content: token,
       });
-    }
-
-    if (genSpan) {
-      const genUpdate: { output: string; usage?: { input: number; output: number; total: number } } = { output: fullAnswer };
-      if (usageRef.current) {
-        genUpdate.usage = usageRef.current;
-      }
-      genSpan.end(genUpdate);
     }
 
     if (!reply.raw.destroyed) {
@@ -212,10 +185,6 @@ Ask me any question about your uploaded documents.
       });
     }
 
-    if (trace) {
-      trace.update({ output: fullAnswer });
-    }
-    await flushLangfuse();
   } catch (error: any) {
     logger.error({ err: error }, "❌ Error in handleChat");
     reply.log.error(error);

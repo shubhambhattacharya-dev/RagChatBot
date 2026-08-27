@@ -27,8 +27,9 @@
   --aurora-green: #4ade80;
   --aurora-emerald: #10b981;
   --aurora-neon: #00ffaa;
-  --error-green-bg: rgba(74, 222, 128, 0.14);
-  --error-green-border: rgba(74, 222, 128, 0.4);
+  --status-error: #f87171;
+  --status-error-bg: rgba(248, 113, 113, 0.14);
+  --status-error-border: rgba(248, 113, 113, 0.45);
 
   /* Text */
   --text-primary: #f8fafc;
@@ -77,129 +78,6 @@ html, body {
   color: var(--text-primary);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
-}
-
-/* ==================== 3D GREEN AURORA LIGHTS ==================== */
-#bg3dCanvas {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.6;
-}
-
-/* ==================== 3D GIF BACKGROUND VORTEX ==================== */
-.gif-3d-background-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.gif-vortex-art {
-  position: absolute;
-  width: 90vw;
-  height: 90vh;
-  max-width: 1200px;
-  max-height: 800px;
-  background-size: cover;
-  background-position: center;
-  border-radius: 50%;
-  opacity: 0.22;
-  mix-blend-mode: screen;
-  filter: contrast(1.2) brightness(1.1) drop-shadow(0 0 40px rgba(74, 222, 128, 0.4));
-  animation: vortexRotate 35s infinite linear;
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
-.gif-3d-hologram-ring {
-  position: absolute;
-  width: 600px;
-  height: 600px;
-  border: 2px dashed rgba(74, 222, 128, 0.25);
-  border-radius: 50%;
-  box-shadow: 0 0 50px rgba(74, 222, 128, 0.15), inset 0 0 50px rgba(59, 130, 246, 0.15);
-  animation: hologramPulse 12s infinite ease-in-out alternate;
-  transform: rotateX(60deg) rotateZ(0deg);
-}
-
-@keyframes vortexRotate {
-  0% { transform: rotateX(25deg) rotateY(-10deg) rotateZ(0deg) scale(1); }
-  50% { transform: rotateX(35deg) rotateY(15deg) rotateZ(180deg) scale(1.08); }
-  100% { transform: rotateX(25deg) rotateY(-10deg) rotateZ(360deg) scale(1); }
-}
-
-@keyframes hologramPulse {
-  0% { transform: rotateX(60deg) rotateZ(0deg) scale(0.9); opacity: 0.2; }
-  50% { transform: rotateX(65deg) rotateZ(180deg) scale(1.15); opacity: 0.4; }
-  100% { transform: rotateX(60deg) rotateZ(360deg) scale(0.9); opacity: 0.2; }
-}
-
-.aurora-container {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-  perspective: 1000px;
-}
-
-.aurora-wave {
-  position: absolute;
-  filter: blur(80px);
-  opacity: 0.35;
-  border-radius: 40%;
-  animation: auroraFlow 18s infinite alternate ease-in-out;
-  transform-style: preserve-3d;
-}
-
-.wave-1 {
-  width: 700px;
-  height: 450px;
-  background: radial-gradient(ellipse at center, var(--aurora-green) 0%, var(--aurora-emerald) 50%, transparent 80%);
-  top: -150px;
-  right: -100px;
-  animation-duration: 20s;
-}
-
-.wave-2 {
-  width: 800px;
-  height: 500px;
-  background: radial-gradient(ellipse at center, var(--aurora-neon) 0%, var(--aurora-emerald) 60%, transparent 80%);
-  bottom: -200px;
-  left: -150px;
-  animation-delay: -8s;
-  animation-duration: 24s;
-}
-
-.wave-3 {
-  width: 600px;
-  height: 400px;
-  background: radial-gradient(ellipse at center, var(--aurora-green) 0%, rgba(59, 130, 246, 0.4) 70%, transparent 90%);
-  top: 35%;
-  left: 25%;
-  animation-delay: -14s;
-  animation-duration: 16s;
-}
-
-@keyframes auroraFlow {
-  0% { transform: rotateX(20deg) rotateY(-10deg) translate3d(0, 0, 0) scale(1); }
-  50% { transform: rotateX(35deg) rotateY(15deg) translate3d(80px, 40px, 50px) scale(1.2); }
-  100% { transform: rotateX(15deg) rotateY(-20deg) translate3d(-60px, 90px, -30px) scale(0.9); }
-}
-
-.aurora-glow-icon {
-  color: var(--aurora-green) !important;
-  box-shadow: 0 0 25px rgba(74, 222, 128, 0.4) !important;
 }
 
 /* ==================== GLASSMORPHISM PANELS ==================== */
@@ -411,8 +289,8 @@ html, body {
 }
 
 .doc-status.error, .file-status.error {
-  background: var(--error-green-bg);
-  color: var(--aurora-green);
+  background: var(--status-error-bg);
+  color: var(--status-error);
 }
 
 .doc-delete {
@@ -425,7 +303,7 @@ html, body {
 }
 
 .doc-delete:hover {
-  color: var(--aurora-green);
+  color: var(--status-error);
 }
 
 /* Sidebar Footer */
@@ -458,7 +336,8 @@ html, body {
 }
 
 .status-dot.disconnected {
-  background: var(--aurora-green);
+  background: var(--status-error);
+  box-shadow: 0 0 8px var(--status-error);
 }
 
 /* ==================== MAIN CHAT AREA ==================== */
@@ -863,7 +742,7 @@ html, body {
   color: var(--accent-blue);
 }
 
-/* ==================== 3D GREEN AURORA ERRORS & TOASTS ==================== */
+/* ==================== TOASTS ==================== */
 .toast-container {
   position: fixed;
   top: 16px;
@@ -888,20 +767,18 @@ html, body {
   border-color: var(--accent-blue);
 }
 
-/* Light Green Error Toast with Aurora Glow */
 .toast.error {
-  border-color: var(--aurora-green);
-  background: rgba(10, 24, 16, 0.95);
-  color: var(--aurora-green);
-  box-shadow: 0 0 16px rgba(74, 222, 128, 0.3);
+  border-color: var(--status-error);
+  background: var(--status-error-bg);
+  color: var(--status-error);
+  box-shadow: 0 0 16px rgba(248, 113, 113, 0.22);
 }
 
-/* Light Green Error Message Box */
 .message-error .bubble, blockquote.error-quote {
-  background: var(--error-green-bg) !important;
-  border-color: var(--error-green-border) !important;
-  color: var(--aurora-green) !important;
-  box-shadow: 0 0 12px rgba(74, 222, 128, 0.15) !important;
+  background: var(--status-error-bg) !important;
+  border-color: var(--status-error-border) !important;
+  color: var(--status-error) !important;
+  box-shadow: 0 0 12px rgba(248, 113, 113, 0.15) !important;
 }
 
 /* ============================================
@@ -1016,4 +893,110 @@ html, body {
     opacity: 1;
     pointer-events: auto;
   }
+}
+
+/* ==================== MISSING UI ELEMENTS ==================== */
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  border-top-left-radius: var(--r-sm);
+  width: fit-content;
+  animation: fadeInMsg 200ms ease-out;
+}
+
+.typing-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--accent-blue);
+  border-radius: 50%;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* Message structure */
+.message-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+  letter-spacing: 0.3px;
+}
+
+.message-content {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.message-content p {
+  margin-bottom: 8px;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Source citation chips */
+.sources-wrap {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-chip {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  color: var(--accent-blue);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.source-num {
+  font-size: 10px;
+}
+
+/* Streaming cursor */
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: var(--accent-blue);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursorBlink 1s step-end infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Error message styling */
+.message-error .message-role {
+  color: var(--status-error);
+}
+
+.message-error .message-content {
+  color: var(--status-error);
 }

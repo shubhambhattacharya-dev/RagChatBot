@@ -2,12 +2,33 @@
    RAG Space — Minimalist Frontend Application
    ============================================ */
 
-// Configured API target
+// Production is same-origin: Fastify serves this folder and API requests stay relative.
+// When opened by a local static server, the backend is expected on port 3001.
+// Set window.RAG_API_BASE before app.js only when intentionally using another API host.
 const configuredApi = typeof window.RAG_API_BASE === 'string'
-  ? window.RAG_API_BASE.replace(/\/$/, '')
+  ? window.RAG_API_BASE.trim().replace(/\/$/, '')
   : '';
-const localBackend = `${location.protocol === 'file:' ? 'http:' : location.protocol}//${location.hostname || 'localhost'}:3000`;
-const API = configuredApi || (location.port === '5500' ? localBackend : '');
+const isLocalHost = location.protocol === 'file:'
+  || /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname);
+const isStaticDevServer = isLocalHost && location.port !== '3001';
+const localBackend = `http://${location.hostname || 'localhost'}:3001`;
+const API = configuredApi || (isStaticDevServer ? localBackend : '');
+
+function apiUrl(path) {
+  return `${API}${path}`;
+}
+
+function humanizeError(error, fallback) {
+  if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+    return 'The server took too long to respond. Please try again.';
+  }
+  if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+    return API
+      ? `Cannot reach the API at ${API}. Start the backend with "bun run dev" from the Backend folder.`
+      : 'Cannot reach the application server. Refresh the page and try again.';
+  }
+  return error?.message || fallback;
+}
 
 // ==================== STATE ====================
 const state = {
@@ -42,183 +63,8 @@ function initDOM() {
   el.attachBtn = $('#attachBtn');
   el.statusDot = $('#statusDot');
   el.statusLabel = $('#statusLabel');
-  el.canvas3d = $('#bg3dCanvas');
 }
 initDOM();
-
-// ==================== 3D GREEN AURORA & SHOOTING STARS CANVAS ENGINE ====================
-function initMinimal3D() {
-  if (!el.canvas3d) return;
-  const ctx = el.canvas3d.getContext('2d');
-  let w = (el.canvas3d.width = window.innerWidth);
-  let h = (el.canvas3d.height = window.innerHeight);
-
-  window.addEventListener('resize', () => {
-    w = el.canvas3d.width = window.innerWidth;
-    h = el.canvas3d.height = window.innerHeight;
-  });
-
-  const mouse = { x: w / 2, y: h / 2, targetX: w / 2, targetY: h / 2 };
-  window.addEventListener('mousemove', (e) => {
-    mouse.targetX = e.clientX;
-    mouse.targetY = e.clientY;
-  });
-
-  // 1. 3D Starfield & Aurora Particles
-  const numParticles = 160;
-  const particles = [];
-  for (let i = 0; i < numParticles; i++) {
-    const isAurora = i % 3 === 0;
-    particles.push({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      z: Math.random() * 800 + 1,
-      size: isAurora ? Math.random() * 2.5 + 1 : Math.random() * 1.2 + 0.4,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: (Math.random() - 0.5) * 0.3,
-      alpha: Math.random() * 0.6 + 0.2,
-      color: isAurora
-        ? (i % 6 === 0 ? '#4ade80' : i % 6 === 3 ? '#00ffaa' : '#10b981')
-        : '#3b82f6',
-    });
-  }
-
-  // 2. 3D Top-Sky Shooting Stars (Meteors & Comets) Engine
-  const comets = [];
-  function spawnComet() {
-    if (comets.length < 7 && Math.random() < 0.07) {
-      const fromTop = Math.random() > 0.3;
-      comets.push({
-        x: fromTop ? Math.random() * (w * 1.2) - w * 0.2 : -30,
-        y: fromTop ? -30 : Math.random() * (h * 0.4),
-        z: Math.random() * 600 + 80,
-        length: Math.random() * 160 + 80,
-        speed: Math.random() * 16 + 10,
-        angle: Math.PI / 3.8 + (Math.random() - 0.5) * 0.15,
-        alpha: 1,
-        color: Math.random() > 0.4 ? '#4ade80' : Math.random() > 0.5 ? '#00ffaa' : '#3b82f6',
-      });
-    }
-  }
-
-  function render() {
-    ctx.clearRect(0, 0, w, h);
-
-    mouse.x += (mouse.targetX - mouse.x) * 0.03;
-    mouse.y += (mouse.targetY - mouse.y) * 0.03;
-
-    const offsetX = (mouse.x - w / 2) * 0.04;
-    const offsetY = (mouse.y - h / 2) * 0.04;
-
-    const gifLayer = document.getElementById('gif3dLayer');
-    if (gifLayer) {
-      const rx = ((mouse.y - h / 2) / (h / 2)) * -6;
-      const ry = ((mouse.x - w / 2) / (w / 2)) * 6;
-      gifLayer.style.transform = `perspective(1200px) rotateX(${rx}deg) rotateY(${ry}deg)`;
-    }
-
-    // Draw Particles
-    particles.forEach((p) => {
-      p.x += p.vx;
-      p.y += p.vy;
-
-      if (p.x < 0) p.x = w;
-      if (p.x > w) p.x = 0;
-      if (p.y < 0) p.y = h;
-      if (p.y > h) p.y = 0;
-
-      const px = p.x + offsetX * (400 / p.z);
-      const py = p.y + offsetY * (400 / p.z);
-
-      ctx.beginPath();
-      ctx.arc(px, py, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = p.color;
-      ctx.globalAlpha = p.alpha;
-      ctx.shadowBlur = p.size * 3;
-      ctx.shadowColor = p.color;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
-    });
-
-    // Render & Update Top-Sky 3D Shooting Stars
-    spawnComet();
-    for (let i = comets.length - 1; i >= 0; i--) {
-      const c = comets[i];
-      c.x += Math.cos(c.angle) * c.speed;
-      c.y += Math.sin(c.angle) * c.speed;
-      c.alpha -= 0.012;
-
-      const k = 400 / c.z;
-      const cx = c.x + offsetX * k;
-      const cy = c.y + offsetY * k;
-      const tailX = cx - Math.cos(c.angle) * c.length * k;
-      const tailY = cy - Math.sin(c.angle) * c.length * k;
-
-      if (c.alpha <= 0 || cx > w + 150 || cy > h + 150) {
-        comets.splice(i, 1);
-        continue;
-      }
-
-      // Trail Gradient
-      const grad = ctx.createLinearGradient(cx, cy, tailX, tailY);
-      grad.addColorStop(0, `rgba(255, 255, 255, ${c.alpha})`);
-      grad.addColorStop(0.3, c.color === '#4ade80' ? `rgba(74, 222, 128, ${c.alpha * 0.9})` : `rgba(59, 130, 246, ${c.alpha * 0.9})`);
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-      // Draw Trail
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = Math.max(1.2, 3 * k);
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = c.color;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(tailX, tailY);
-      ctx.stroke();
-
-      // Glowing Meteor Star Head
-      ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(1.5, 3 * k), 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 255, 255, ${c.alpha})`;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    requestAnimationFrame(render);
-  }
-
-  render();
-}
-initMinimal3D();
-
-// ==================== 3D CARD TILT ENGINE ====================
-function init3DTilt() {
-  document.addEventListener('mousemove', (e) => {
-    const cards = document.querySelectorAll('.tilt-card');
-    cards.forEach((card) => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      if (
-        x >= 0 &&
-        x <= rect.width &&
-        y >= 0 &&
-        y <= rect.height
-      ) {
-        const centerX = rect.width / 2;
-        const centerY = rect.height / 2;
-        const rotateX = ((y - centerY) / centerY) * -5;
-        const rotateY = ((x - centerX) / centerX) * 5;
-
-        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-      } else {
-        card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
-      }
-    });
-  });
-}
-init3DTilt();
 
 // ==================== UTILITIES ====================
 function escapeHTML(str) {
@@ -252,7 +98,7 @@ function toast(msg, type = 'success', duration = 3000) {
 // ==================== HEALTH ====================
 async function checkHealth() {
   try {
-    const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(4000) });
+    const r = await fetch(apiUrl('/health'), { signal: AbortSignal.timeout(4000) });
     if (r.ok) {
       el.statusDot.className = 'status-dot connected';
       el.statusLabel.textContent = 'Connected';
@@ -341,14 +187,15 @@ async function uploadFile(file) {
   const fd = new FormData();
   fd.append('file', file);
 
-  const res = await fetch(`${API}/upload`, { method: 'POST', body: fd });
-  const body = await res.json();
+  const res = await fetch(apiUrl('/upload'), { method: 'POST', body: fd });
+  const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || body.message || 'Upload failed');
   return body;
 }
 
 function addFileItem(file, status) {
-  const existing = el.fileList.querySelector(`[data-name="${file.name}"]`);
+  const existing = [...el.fileList.querySelectorAll('.file-item')]
+    .find((item) => item.dataset.name === file.name);
   if (existing) existing.remove();
 
   const icon = { pdf: '📄', docx: '📄', txt: '📄', md: '📝' };
@@ -365,7 +212,8 @@ function addFileItem(file, status) {
 }
 
 function updateFileItem(file, status) {
-  const item = el.fileList.querySelector(`[data-name="${file.name}"]`);
+  const item = [...el.fileList.querySelectorAll('.file-item')]
+    .find((element) => element.dataset.name === file.name);
   if (!item) return;
   const statusEl = item.querySelector('.file-status');
   statusEl.className = `file-status ${status}`;
@@ -380,7 +228,8 @@ async function pollStatus(docId, file) {
   for (let i = 0; i < 40; i++) {
     await sleep(2000);
     try {
-      const r = await fetch(`${API}/document/${docId}`);
+      const r = await fetch(apiUrl(`/document/${encodeURIComponent(docId)}`));
+      if (!r.ok) throw new Error('Unable to retrieve document status');
       const doc = await r.json();
       if (doc.status === 'READY' || doc.status === 'ready') {
         updateFileItem(file, 'ready');
@@ -404,7 +253,7 @@ async function pollStatus(docId, file) {
 // ==================== DOCUMENTS ====================
 async function loadDocs() {
   try {
-    const r = await fetch(`${API}/documents`);
+    const r = await fetch(apiUrl('/documents'));
     if (!r.ok) throw new Error('Failed to load documents');
     state.docs = await r.json();
     renderDocs();
@@ -457,7 +306,7 @@ function renderDocs() {
       e.stopPropagation();
       if (!confirm(`Delete "${doc.filename}"?`)) return;
       try {
-        const r = await fetch(`${API}/document/${doc.id}`, { method: 'DELETE' });
+        const r = await fetch(apiUrl(`/document/${encodeURIComponent(doc.id)}`), { method: 'DELETE' });
         if (!r.ok) throw new Error('Delete failed');
         if (state.activeDocId === doc.id) state.activeDocId = null;
         await loadDocs();
@@ -491,7 +340,7 @@ async function sendMessage() {
   } catch (err) {
     typing.remove();
     addMessageBubble(
-      `⚠️ ${err.message}. Ensure backend is running.`,
+      `⚠️ ${humanizeError(err, 'Unable to send your message')}`,
       'error'
     );
   } finally {
@@ -502,12 +351,12 @@ async function sendMessage() {
 
 async function streamResponse(question, typingEl) {
   const docParam = state.activeDocId ? `&documentId=${state.activeDocId}` : '';
-  const res = await fetch(`${API}/chat?question=${encodeURIComponent(question)}${docParam}`);
+  const res = await fetch(apiUrl(`/chat?question=${encodeURIComponent(question)}${docParam}`));
 
   if (!res.ok) {
     typingEl.remove();
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server returned ${res.status}`);
+    throw new Error(body.error || body.message || `Server returned ${res.status}`);
   }
 
   const reader = res.body.getReader();

@@ -16,13 +16,10 @@ export function createRedis(url: string): Redis {
     ...(needsTls ? { tls: {} } : {}),
   });
 
-  // Suppress the "Eviction policy is allkeys-lru" warning from ioredis.
-  // Docker/compose sets noeviction; local dev Redis may use the default.
-  // Either way, BullMQ handles memory pressure gracefully — this warning
-  // adds noise without actionable value.
-  redis.on("warning", (msg: string) => {
-    if (msg.includes("Eviction policy")) return; // suppress
-    logger.warn({ msg }, "Redis warning");
+  redis.on("connect", () => {
+    redis.config("SET", "maxmemory-policy", "noeviction").catch(() => {
+      // Non-fatal: managed Redis providers often disallow CONFIG SET.
+    });
   });
 
   return redis;

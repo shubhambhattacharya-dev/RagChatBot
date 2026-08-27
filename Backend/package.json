@@ -11,8 +11,8 @@
     "vitest": "^4.1.10"
   },
   "scripts": {
-    "dev": "bun --watch src/app.ts",
-    "start": "bun src/app.ts",
+    "dev": "bunx prisma generate && bun --watch src/app.ts",
+    "start": "bunx prisma generate && bun src/app.ts",
     "typecheck": "tsc --noEmit",
     "db:setup": "bun scripts/init-db.ts && bunx prisma db push && bun scripts/ensure-vector-index.ts",
     "reindex": "bun scripts/reindex.ts",

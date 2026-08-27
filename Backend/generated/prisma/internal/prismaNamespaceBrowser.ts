@@ -90,7 +90,7 @@ export const ChunkScalarFieldEnum = {
   content: 'content',
   metadata: 'metadata',
   chunkIndex: 'chunkIndex',
-  createdAT: 'createdAT'
+  createdAt: 'createdAt'
 } as const
 
 export type ChunkScalarFieldEnum = (typeof ChunkScalarFieldEnum)[keyof typeof ChunkScalarFieldEnum]
