@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chunkText, enrichChunks, detectDocumentOwner } from "../../src/utils/chunking";
-import { expandQuery, buildLexicalTsQuery, mergeRetrievalResults, MAX_DISTANCE } from "../../src/modules/chat/retrieval";
+import { expandQuery, buildLexicalTsQuery, getPersonLookupTerm, mergeRetrievalResults, MAX_DISTANCE, MIN_OWNER_RELEVANCE, MIN_LEXICAL_RELEVANCE, type SearchResult } from "../../src/modules/chat/retrieval";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -213,6 +213,132 @@ describe("RAG Pipeline E2E", () => {
       expect(merged.length).toBe(1);
       expect(merged[0]!.content).toContain("Manish Bhattacharya");
       expect(merged[0]!.content).toContain("test@gmail.com");
+    });
+  });
+
+  // ── Stage 6: Low-Relevance Bypass Integration ─────────────────────
+
+  describe("Stage 6: Low-Relevance Bypass Integration", () => {
+    /**
+     * Simulates the full pipeline flow from routes.ts:
+     *  expandQuery → buildLexicalTsQuery → getPersonLookupTerm
+     *  → mock DB rows → owner relevance filtering → mergeRetrievalResults
+     */
+    test("person query with low-relevance owner + lexical rows falls back to vector", () => {
+      const question = "who is Manish?";
+
+      // 1. Query expansion
+      const expanded = expandQuery(question);
+      expect(expanded).toContain("Manish");
+      expect(expanded).toContain("professional summary");
+
+      // 2. Lexical query
+      const lexicalQuery = buildLexicalTsQuery(question);
+      expect(lexicalQuery).toContain("manish:*");
+
+      // 3. Person lookup term
+      const personTerm = getPersonLookupTerm(question);
+      expect(personTerm).toBe("manish");
+
+      // 4. Mock DB: owner rows that do NOT contain the person term in content
+      //    (e.g. footer noise matched by filename ILIKE but not by content)
+      const mockOwnerRows: SearchResult[] = [
+        { content: "random footer with emails", filename: "manish.pdf", distance: 0 },
+        { content: "unrelated header text", filename: "manish.pdf", distance: 0 },
+      ];
+
+      // 5. Apply the same owner filtering logic from routes.ts
+      const filteredOwnerRows = personTerm
+        ? mockOwnerRows
+            .map((row) => ({
+              ...row,
+              relevance: row.content.toLowerCase().includes(personTerm) ? 1.0 : 0.0,
+            }))
+            .filter((row) => row.relevance >= MIN_OWNER_RELEVANCE)
+        : mockOwnerRows;
+
+      // Both rows lack "manish" in content → relevance 0.0 → filtered out
+      expect(filteredOwnerRows).toHaveLength(0);
+
+      // 6. Mock DB: lexical rows with low ts_rank
+      const mockLexicalRows: SearchResult[] = [
+        { content: "weak keyword hit", filename: "manish.pdf", distance: 0, relevance: 0.05 },
+      ];
+
+      // 7. Mock DB: vector rows within distance threshold
+      const mockVectorRows: SearchResult[] = [
+        { content: "Manish Bhattacharya email: test@gmail.com", filename: "manish.pdf", distance: 0.3 },
+        { content: "Manish works at SynapseFi", filename: "manish.pdf", distance: 0.35 },
+      ];
+
+      // 8. Merge — the critical step
+      const relevant = mergeRetrievalResults(filteredOwnerRows, mockLexicalRows, mockVectorRows);
+
+      // Low-relevance owner + lexical should be filtered; vector fallback should kick in
+      expect(relevant.length).toBeGreaterThan(0);
+      expect(relevant).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: expect.stringContaining("Manish") }),
+        ]),
+      );
+      // The weak lexical row should NOT appear
+      expect(relevant.find((r) => r.content === "weak keyword hit")).toBeUndefined();
+      // The noisy owner rows should NOT appear
+      expect(relevant.find((r) => r.content === "random footer with emails")).toBeUndefined();
+      expect(relevant.find((r) => r.content === "unrelated header text")).toBeUndefined();
+    });
+
+    test("all filtered + no vector → empty context (no context passed gate)", () => {
+      const question = "who is Manish?";
+      const personTerm = getPersonLookupTerm(question);
+
+      const mockOwnerRows: SearchResult[] = [
+        { content: "noise", filename: "manish.pdf", distance: 0 },
+      ];
+      const filteredOwnerRows = mockOwnerRows
+        .map((row) => ({
+          ...row,
+          relevance: row.content.toLowerCase().includes(personTerm!) ? 1.0 : 0.0,
+        }))
+        .filter((row) => row.relevance >= MIN_OWNER_RELEVANCE);
+
+      const mockLexicalRows: SearchResult[] = [
+        { content: "weak", filename: "manish.pdf", distance: 0, relevance: 0.01 },
+      ];
+
+      const vectorRows: SearchResult[] = [
+        { content: "far", filename: "manish.pdf", distance: MAX_DISTANCE + 0.1 },
+      ];
+
+      const relevant = mergeRetrievalResults(filteredOwnerRows, mockLexicalRows, vectorRows);
+
+      // Everything filtered → empty context → routes.ts would show "no relevant information"
+      expect(relevant).toHaveLength(0);
+    });
+
+    test("high-relevance owner row passes through while low-relevance is blocked", () => {
+      const question = "who is Manish?";
+      const personTerm = getPersonLookupTerm(question);
+
+      const mockOwnerRows: SearchResult[] = [
+        { content: "noise without person name", filename: "manish.pdf", distance: 0 },
+        { content: "Manish is a software engineer", filename: "manish.pdf", distance: 0 },
+      ];
+
+      const filteredOwnerRows = mockOwnerRows
+        .map((row) => ({
+          ...row,
+          relevance: row.content.toLowerCase().includes(personTerm!) ? 1.0 : 0.0,
+        }))
+        .filter((row) => row.relevance >= MIN_OWNER_RELEVANCE);
+
+      // Only the row containing "manish" passes
+      expect(filteredOwnerRows).toHaveLength(1);
+      expect(filteredOwnerRows[0]!.content).toBe("Manish is a software engineer");
+
+      const relevant = mergeRetrievalResults(filteredOwnerRows, [], []);
+      expect(relevant).toHaveLength(1);
+      expect(relevant[0]!.content).toBe("Manish is a software engineer");
     });
   });
 

@@ -615,6 +615,53 @@ describe("mergeRetrievalResults", () => {
     });
   });
 
+  describe("bypass attempt filtering", () => {
+    test("blocks exact match bypass with low relevance", () => {
+      const exact = [{ content: "foo", filename: "a.pdf", distance: 0, relevance: 0.1 }];
+      const result = mergeRetrievalResults(exact, [], []);
+      expect(result).toEqual([]); // Should be filtered out
+    });
+
+    test("blocks lexical match bypass with low relevance", () => {
+      const lexical = [{ content: "bar", filename: "b.pdf", distance: 0, relevance: 0.05 }];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toEqual([]); // Should be filtered out
+    });
+
+    test("falls back to vector results when all filters empty", () => {
+      const exact = [{ content: "foo", filename: "a.pdf", distance: 0, relevance: 0.1 }]; // filtered out
+      const vector = [{ content: "good", filename: "c.pdf", distance: 0.3 }]; // within MAX_DISTANCE
+      const result = mergeRetrievalResults(exact, [], vector);
+      expect(result).toEqual([{ content: "good", filename: "c.pdf", distance: 0.3 }]);
+    });
+
+    test("exact match at threshold boundary (relevance = 0.5) is kept", () => {
+      const exact = [{ content: "boundary", filename: "a.pdf", distance: 0, relevance: 0.5 }];
+      const result = mergeRetrievalResults(exact, [], []);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.content).toBe("boundary");
+    });
+
+    test("exact match just below threshold (relevance = 0.49) is filtered", () => {
+      const exact = [{ content: "just below", filename: "a.pdf", distance: 0, relevance: 0.49 }];
+      const result = mergeRetrievalResults(exact, [], []);
+      expect(result).toEqual([]);
+    });
+
+    test("lexical match at threshold boundary (relevance = 0.1) is kept", () => {
+      const lexical = [{ content: "boundary", filename: "b.pdf", distance: 0, relevance: 0.1 }];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.content).toBe("boundary");
+    });
+
+    test("lexical match just below threshold (relevance = 0.09) is filtered", () => {
+      const lexical = [{ content: "just below", filename: "b.pdf", distance: 0, relevance: 0.09 }];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toEqual([]);
+    });
+  });
+
   describe("Bug #5: empty result handling", () => {
     test("falls back to filtered vector results when all other sources are empty", () => {
       const vector = [row("vector match", 0.3, "doc.pdf")];
