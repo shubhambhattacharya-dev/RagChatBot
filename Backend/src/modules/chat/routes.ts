@@ -14,6 +14,7 @@ import {
   mergeRetrievalResults,
   type SearchResult,
   TOP_K,
+  MIN_OWNER_RELEVANCE,
 } from "./retrieval";
 import { databaseCircuitBreaker } from "../../utils/resilience";
 import { withSpan } from "../../observability";
@@ -106,12 +107,12 @@ Ask me any question about your uploaded documents.
     const lexicalQuery = buildLexicalTsQuery(question);
     const lexicalRows: SearchResult[] = lexicalQuery
       ? await databaseCircuitBreaker.execute(() => withSpan("db.lexical_search", { "db.operation": "lexical_search" }, () => prisma.$queryRaw<SearchResult[]>`
-          SELECT c.content, d.filename, 0::double precision AS distance
+          SELECT c.content, d.filename, 0::double precision AS distance, ts_rank(to_tsvector('simple', c.content), to_tsquery('simple', ${lexicalQuery})) AS relevance
           FROM "Chunk" c
           JOIN "Document" d ON d.id = c."documentId"
           WHERE ${docFilter}
             AND to_tsvector('simple', c.content) @@ to_tsquery('simple', ${lexicalQuery})
-          ORDER BY ts_rank(to_tsvector('simple', c.content), to_tsquery('simple', ${lexicalQuery})) DESC
+          ORDER BY relevance DESC
           LIMIT ${TOP_K}
         `))
       : [];
@@ -127,8 +128,17 @@ Ask me any question about your uploaded documents.
         `))
       : [];
 
-    const relevant = mergeRetrievalResults(ownerRows, lexicalRows, vectorRows);
-    const rows = relevant.length > 0 ? relevant : vectorRows;
+    const filteredOwnerRows = personTerm
+      ? ownerRows
+          .map((row) => ({
+            ...row,
+            relevance: row.content.toLowerCase().includes(personTerm.toLowerCase()) ? 1.0 : 0.0,
+          }))
+          .filter((row) => row.relevance >= MIN_OWNER_RELEVANCE)
+      : ownerRows;
+
+    const relevant = mergeRetrievalResults(filteredOwnerRows, lexicalRows, vectorRows);
+    const rows = relevant;
 
     const contextChunks = relevant.map((row) => row.content);
     const sourceDocs = [...new Map(relevant.map((row) => [row.filename, row.filename])).keys()];

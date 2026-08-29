@@ -4,14 +4,17 @@ export type SearchResult = {
   content: string;
   filename: string;
   distance: number;
+  relevance?: number;
 };
 
 export const TOP_K = 8;
 export const MAX_DISTANCE = 0.5;
+export const MIN_LEXICAL_RELEVANCE = 0.1;
+export const MIN_OWNER_RELEVANCE = 0.5;
 
 const LEXICAL_STOP_WORDS = new Set([
-  "a", "an", "and", "are", "document", "for", "from", "in", "is", "list",
-  "me", "of", "on", "or", "the", "this", "to", "what", "who", "with",
+  "a", "an", "and", "are", "for", "from", "in", "is", "me", "of", "on", "or",
+  "the", "this", "to", "with",
 ]);
 
 type ExpansionRule = {
@@ -33,7 +36,23 @@ const EXPANSION_RULES: ExpansionRule[] = [
   { exact: /^(human name|names|people|person|name)$/i, expand: "What are the names of the people or authors mentioned in this document?" },
 ];
 
-const PERSON_RE = /^(?:who\s+is|(?:information|info)\s+about|tell\s+me\s+about)\s+([a-z][a-z'-]{2,})(?:\s*[?!.])?$/i;
+const PERSON_RE = /^(?:who\s+is|(?:information|info)\s+about|tell\s+me\s+about)\s+(.+?)(?:\s*[?!.,]+)?$/i;
+
+const NAME_STOP_WORDS = new Set([
+  "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+  "have", "has", "had", "do", "does", "did", "will", "would", "could",
+  "should", "may", "might", "must", "shall", "can", "need", "to", "of",
+  "in", "for", "on", "with", "at", "by", "from", "as", "into", "through",
+  "during", "before", "after", "above", "below", "between", "out", "off",
+  "over", "under", "again", "further", "then", "once", "here", "there",
+  "when", "where", "why", "how", "all", "each", "every", "both", "few",
+  "more", "most", "other", "some", "such", "no", "nor", "not", "only",
+  "own", "same", "so", "than", "too", "very", "just", "because", "but",
+  "and", "or", "if", "while", "although", "though", "even", "that", "this",
+  "these", "those", "what", "which", "who", "whom", "whose", "best",
+  "engineer", "about", "list", "tell", "information", "info", "my", "your",
+  "his", "her", "its", "our", "their", "me", "him", "us", "them",
+]);
 
 export function expandQuery(question: string): string {
   const q = question.trim().toLowerCase();
@@ -55,8 +74,24 @@ export function expandQuery(question: string): string {
   return question;
 }
 
+const NAME_TITLES = new Set(["mr", "mrs", "ms", "dr", "prof", "sr", "jr"]);
+
 export function getPersonLookupTerm(question: string): string | null {
-  return question.trim().match(PERSON_RE)?.[1]?.toLowerCase() ?? null;
+  const match = question.trim().match(PERSON_RE);
+  if (!match) return null;
+  const name = match[1]?.trim().toLowerCase();
+  if (!name) return null;
+  if (name.length < 3) return null;
+  let words = name.split(/\s+/);
+  while (words.length > 0 && NAME_TITLES.has(words[0]!.replace(/[.,]/g, ""))) {
+    words = words.slice(1);
+  }
+  if (words.length === 0 || words.length > 5) return null;
+  const rejoined = words.join(" ");
+  if (words.some((w) => NAME_STOP_WORDS.has(w.replace(/[.,]/g, "")))) return null;
+  if (!/^[a-z]/.test(rejoined)) return null;
+  if (words.some((w) => /\d/.test(w))) return null;
+  return rejoined;
 }
 
 export function buildLexicalTsQuery(question: string): string | null {
@@ -84,7 +119,7 @@ export function mergeRetrievalResults(
   maxResults = TOP_K
 ): SearchResult[] {
   const K = 60;
-  const scores = new Map<string, { row: SearchResult; score: number }>();
+  const scores = new Map<string, { row: SearchResult; score: number; sourceWeight: number }>();
 
   const addRanked = (rows: SearchResult[], weight: number) => {
     rows.forEach((row, rank) => {
@@ -93,23 +128,39 @@ export function mergeRetrievalResults(
       const existing = scores.get(key);
       if (existing) {
         existing.score += rrfScore;
-        if (row.distance < existing.row.distance) existing.row = row;
+        existing.sourceWeight = Math.max(existing.sourceWeight, weight);
+        if (existing.sourceWeight === weight && row.distance < existing.row.distance) {
+          existing.row = row;
+        }
       } else {
-        scores.set(key, { row, score: rrfScore });
+        scores.set(key, { row, score: rrfScore, sourceWeight: weight });
       }
     });
   };
 
-  if (exactRows.length > 0) addRanked(exactRows, 3.0);
-  if (lexicalRows.length > 0) addRanked(lexicalRows, 1.5);
+  const filteredExact = exactRows.filter(
+    (r) => (r.relevance ?? 1.0) >= MIN_OWNER_RELEVANCE
+  );
+  if (filteredExact.length > 0) addRanked(filteredExact, 3.0);
 
-  const filteredVector = exactRows.length > 0
-    ? []
-    : vectorRows.filter((r) => r.distance <= MAX_DISTANCE);
+  const filteredLexical = lexicalRows.filter(
+    (r) => (r.relevance ?? 1.0) >= MIN_LEXICAL_RELEVANCE
+  );
+  if (filteredLexical.length > 0) addRanked(filteredLexical, 1.5);
+
+  const filteredVector = vectorRows.filter((r) => r.distance <= MAX_DISTANCE);
   if (filteredVector.length > 0) addRanked(filteredVector, 1.0);
 
-  return [...scores.values()]
+  const results = [...scores.values()]
     .sort((a, b) => b.score - a.score)
     .slice(0, maxResults)
     .map((s) => s.row);
+
+  if (results.length === 0 && vectorRows.length > 0) {
+    return vectorRows
+      .filter((r) => r.distance <= MAX_DISTANCE)
+      .slice(0, maxResults);
+  }
+
+  return results;
 }

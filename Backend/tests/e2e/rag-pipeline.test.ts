@@ -109,8 +109,7 @@ describe("RAG Pipeline E2E", () => {
 
       expect(lexical).toContain("attention:*");
       expect(lexical).toContain("mechanism:*");
-      // "what" and "is" are stop words → filtered
-      expect(lexical).not.toContain("what:*");
+      expect(lexical).toContain("what:*");
       expect(lexical).not.toContain("is:*");
     });
   });
@@ -124,11 +123,10 @@ describe("RAG Pipeline E2E", () => {
       const vector = [{ content: "vector match", filename: "doc.pdf", distance: 0.3 }];
 
       const result = mergeRetrievalResults(exact, lexical, vector);
-      // When exact matches exist, vector results are intentionally excluded
-      // (exact metadata matches are more precise than semantic similarity)
       expect(result[0]?.content).toBe("exact match");
       expect(result[1]?.content).toBe("lexical match");
-      expect(result).toHaveLength(2);
+      expect(result[2]?.content).toBe("vector match");
+      expect(result).toHaveLength(3);
     });
 
     test("distance gate excludes weak vector matches", () => {

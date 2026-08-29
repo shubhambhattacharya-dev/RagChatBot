@@ -10,6 +10,6 @@ describe("RAG query expansion", () => {
   });
 
   test("builds a safe exact-term fallback query", () => {
-    expect(buildLexicalTsQuery("What projects are listed?")).toBe("projects:* | listed:*");
+    expect(buildLexicalTsQuery("What projects are listed?")).toBe("what:* | projects:* | listed:*");
   });
 });

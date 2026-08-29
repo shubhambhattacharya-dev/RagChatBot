@@ -11,8 +11,8 @@ import {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function row(content: string, distance = 0, filename = "doc.pdf"): SearchResult {
-  return { content, filename, distance };
+function row(content: string, distance = 0, filename = "doc.pdf", relevance = 1.0): SearchResult {
+  return { content, filename, distance, relevance };
 }
 
 // ─── expandQuery ────────────────────────────────────────────────────────────
@@ -276,15 +276,15 @@ describe("buildLexicalTsQuery", () => {
 
   describe("stop word filtering", () => {
     test("filters common stop words", () => {
-      const result = buildLexicalTsQuery("what is the document about?");
-      // Stop words filtered: what, is, the, document. "about" remains.
-      expect(result).toBe("about:*");
+      const result = buildLexicalTsQuery("what is the about?");
+      // Stop words filtered: is, the. "what" and "about" remain.
+      expect(result).toBe("what:* | about:*");
     });
 
     test("filters all stop words in a sentence", () => {
       const result = buildLexicalTsQuery("who is the author of this?");
-      // Stop words: who, is, the, this → all filtered
-      expect(result).toBe("author:*");
+      // Stop words: is, the, of, this → filtered. "who" and "author" remain.
+      expect(result).toBe("who:* | author:*");
     });
   });
 
@@ -373,12 +373,13 @@ describe("mergeRetrievalResults", () => {
       expect(result).toHaveLength(1);
     });
 
-    test("excludes vector results when exact matches exist (even if within threshold)", () => {
+    test("includes vector results alongside exact matches within threshold", () => {
       const exact = [row("exact", 0)];
       const vector = [row("vector", 0.1)];
       const result = mergeRetrievalResults(exact, [], vector);
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
       expect(result[0]?.content).toBe("exact");
+      expect(result[1]?.content).toBe("vector");
     });
   });
 
@@ -392,7 +393,7 @@ describe("mergeRetrievalResults", () => {
 
     test("keeps different content as separate results", () => {
       const exact = [row("content A", 0)];
-      const lexical = [row("content B", 0)];
+      const lexical = [row("content B", 0, "doc.pdf", 0.5)];
       const result = mergeRetrievalResults(exact, lexical, []);
       expect(result).toHaveLength(2);
     });
@@ -404,12 +405,12 @@ describe("mergeRetrievalResults", () => {
       expect(result).toHaveLength(2);
     });
 
-    test("prefers lower distance when same content appears multiple times", () => {
+    test("prefers higher-weight source when same content appears multiple times", () => {
       const exact = [row("same", 0.4)];
       const lexical = [row("same", 0.2)];
       const result = mergeRetrievalResults(exact, lexical, []);
       expect(result).toHaveLength(1);
-      expect(result[0]?.distance).toBe(0.2);
+      expect(result[0]?.distance).toBe(0.4);
     });
   });
 
@@ -494,6 +495,140 @@ describe("mergeRetrievalResults", () => {
       const result = mergeRetrievalResults(exact, [], []);
       expect(result).toHaveLength(1);
       expect(result[0]?.content).toBe(longContent);
+    });
+  });
+
+  describe("lexical relevance gating", () => {
+    test("filters out lexical results below MIN_LEXICAL_RELEVANCE", () => {
+      const lexical = [
+        row("weak match", 0, "doc.pdf", 0.01),
+        row("strong match", 0, "doc.pdf", 0.5),
+      ];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.content).toBe("strong match");
+    });
+
+    test("keeps lexical results above MIN_LEXICAL_RELEVANCE", () => {
+      const lexical = [
+        row("relevant chunk", 0, "doc.pdf", 0.2),
+        row("another relevant", 0, "doc.pdf", 0.15),
+      ];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toHaveLength(2);
+    });
+
+    test("drops all lexical results when none pass relevance threshold", () => {
+      const lexical = [
+        row("noise", 0, "doc.pdf", 0.01),
+        row("garbage", 0, "doc.pdf", 0.05),
+      ];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toHaveLength(0);
+    });
+
+    test("relevance below threshold gets filtered", () => {
+      const lexical = [row("no relevance score", 0, "doc.pdf", 0.01)];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("Bug #1: distance gate bypass fix", () => {
+    test("owner rows without person term in content are filtered by relevance", () => {
+      const owner = [row("random footer with emails", 0, "doc.pdf")].map((r) => ({
+        ...r,
+        relevance: r.content.toLowerCase().includes("shubham") ? 1.0 : 0.0,
+      })).filter((r) => r.relevance >= 0.5);
+      const lexical = [row("lexical match", 0, "doc.pdf", 0.5)];
+      const vector = [row("vector match", 0.3, "doc.pdf")];
+      const result = mergeRetrievalResults(owner, lexical, vector);
+      expect(result).toHaveLength(2);
+      expect(result.find((r) => r.content === "random footer with emails")).toBeUndefined();
+    });
+
+    test("lexical rows with low ts_rank are filtered out", () => {
+      const lexical = [row("weak keyword match", 0, "doc.pdf", 0.01)];
+      const result = mergeRetrievalResults([], lexical, []);
+      expect(result).toHaveLength(0);
+    });
+
+    test("vector rows beyond MAX_DISTANCE are still filtered", () => {
+      const vector = [row("far match", MAX_DISTANCE + 0.1, "doc.pdf")];
+      const result = mergeRetrievalResults([], [], vector);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("Bug #2: getPersonLookupTerm improvements", () => {
+    test("captures full names: Shubham Bhattacharya", () => {
+      expect(getPersonLookupTerm("who is Shubham Bhattacharya")).toBe("shubham bhattacharya");
+    });
+
+    test("captures names with titles: Dr. Smith", () => {
+      expect(getPersonLookupTerm("who is Dr. Smith")).toBe("smith");
+    });
+
+    test("captures names with apostrophes: O'Brien", () => {
+      expect(getPersonLookupTerm("who is O'Brien")).toBe("o'brien");
+    });
+
+    test("rejects sentences with stop words: the best engineer", () => {
+      expect(getPersonLookupTerm("who is the best engineer")).toBeNull();
+    });
+
+    test("rejects names with numbers: Agent007", () => {
+      expect(getPersonLookupTerm("who is Agent007")).toBeNull();
+    });
+
+    test("rejects names shorter than 3 chars: Al", () => {
+      expect(getPersonLookupTerm("who is Al")).toBeNull();
+    });
+  });
+
+  describe("Bug #3: stop words fix", () => {
+    test("what and who are no longer stop words", () => {
+      const result = buildLexicalTsQuery("what who");
+      expect(result).toBe("what:* | who:*");
+    });
+
+    test("list and document are no longer stop words", () => {
+      const result = buildLexicalTsQuery("list projects document");
+      expect(result).toBe("list:* | projects:* | document:*");
+    });
+  });
+
+  describe("Bug #4: merge scoring fix", () => {
+    test("higher-weight source wins when same content appears in multiple sources", () => {
+      const exact = [row("same content", 0.4, "doc.pdf")];
+      const lexical = [row("same content", 0.1, "doc.pdf")];
+      const result = mergeRetrievalResults(exact, lexical, []);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.distance).toBe(0.4);
+    });
+
+    test("vector row distance is preserved when it is the only source", () => {
+      const vector = [row("only vector", 0.3, "doc.pdf")];
+      const result = mergeRetrievalResults([], [], vector);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.distance).toBe(0.3);
+    });
+  });
+
+  describe("Bug #5: empty result handling", () => {
+    test("falls back to filtered vector results when all other sources are empty", () => {
+      const vector = [row("vector match", 0.3, "doc.pdf")];
+      const result = mergeRetrievalResults([], [], vector);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.content).toBe("vector match");
+    });
+
+    test("returns empty array when all sources are filtered out", () => {
+      const exact = [row("exact", 0)].map((r) => ({ ...r, relevance: 0.0 }));
+      const lexical = [row("lexical", 0, "doc.pdf", 0.01)];
+      const vector = [row("vector", MAX_DISTANCE + 0.1, "doc.pdf")];
+      const result = mergeRetrievalResults(exact, lexical, vector);
+      expect(result).toHaveLength(0);
     });
   });
 });
