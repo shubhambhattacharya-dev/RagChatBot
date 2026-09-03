@@ -1006,3 +1006,16 @@ loadRemoteHistory();
 setViewMode('welcome');
 
 console.log('✨ RAG Chat initialized with perfect single-input flow and pure Gray/Black Dark Mode');
+
+
+// ==================== v2.1: Example chips (delegated, isolated) ====================
+document.addEventListener('click', (e) => {
+  const chip = e.target.closest('.example-chip');
+  if (!chip) return;
+  const input = document.querySelector('#chatInput');
+  if (!input) return;
+  input.value = chip.dataset.q || '';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  const send = document.querySelector('#sendBtn');
+  if (send && !send.disabled) send.click();
+});

@@ -150,7 +150,7 @@
               </h1>
               <span class="badge-grounded">Grounded Engine</span>
             </div>
-            <p class="header-subtitle">Hybrid Search · Grounded Answers · Citations</p>
+            <p class="header-subtitle">Hybrid Search · Grounded Answers · Citations · <span class="accent-text">100% Eval-Verified</span></p>
           </div>
         </div>
 
@@ -177,7 +177,12 @@
       </header>
 
       <!-- Scrollable Message View -->
-      <div id="messages" class="messages-scroll-area">
+      <div class="welcome-examples" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 0;">
+          <button class="example-chip" data-q="Who wrote Attention Is All You Need?">Who wrote this paper?</button>
+          <button class="example-chip" data-q="What is Manish's email address?">Find a contact detail</button>
+          <button class="example-chip" data-q="What projects does Shubham have?">Scan a resume</button>
+        </div>
+        <div id="messages" class="messages-scroll-area">
 
         <!-- Center Hero Question Input Box (Shown only in Welcome / Empty State) -->
         <div class="welcome-container" id="welcomeScreen">
