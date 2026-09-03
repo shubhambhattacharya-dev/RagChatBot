@@ -715,3 +715,17 @@ loadDocs();
 loadRemoteHistory();
 renderHistory();
 console.log('✨ RAG ChatBot application initialized');
+
+// ==================== v2.1: Example chips (delegated, isolated) ====================
+// Clicking an example chip fills the input and sends — reuses the app's own
+// input element and send path. No existing code paths modified.
+document.addEventListener('click', (e) => {
+  const chip = e.target.closest('.example-chip');
+  if (!chip) return;
+  const input = document.querySelector('#chatInput');
+  if (!input) return;
+  input.value = chip.dataset.q || '';
+  input.dispatchEvent(new Event('input', { bubbles: true })); // re-enables send button via existing handlers
+  const send = document.querySelector('#sendBtn');
+  if (send && !send.disabled) send.click();
+});

@@ -1036,3 +1036,42 @@ html, body {
 .message-error .message-content {
   color: var(--status-error);
 }
+
+/* ===== v2.1 Professional polish (2026-09-03) — additive only ===== */
+
+.welcome-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 18px 0 4px;
+}
+
+.example-chip {
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary, #9a9a9e);
+  background: var(--bg-surface, #191a1b);
+  border: 1px solid var(--border-default, #2a2a2c);
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--t-normal, 0.15s ease);
+}
+
+.example-chip:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+  border-color: var(--accent, #5e6ad2);
+  color: var(--text-primary, #ececf1);
+}
+
+.accent-text {
+  color: var(--accent, #5e6ad2);
+  font-weight: 600;
+}
+
+/* Slight depth on welcome title for hierarchy */
+.welcome-title {
+  letter-spacing: -0.02em;
+}
