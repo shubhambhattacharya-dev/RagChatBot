@@ -20,7 +20,8 @@
     "test:integration": "RUN_INTEGRATION_TESTS=1 bun test tests/database",
     "test:retrieval": "RUN_LIVE_RETRIEVAL_TESTS=1 bun test tests/retrieval",
     "test:llm": "RUN_LIVE_LLM_TESTS=1 bun test tests/llm",
-    "test:e2e": "RUN_E2E_TESTS=1 bun test tests/e2e"
+    "test:e2e": "RUN_E2E_TESTS=1 bun test tests/e2e",
+    "test:eval": "bun tests/eval/run-eval.ts"
   },
   "peerDependencies": {
     "typescript": "^5"

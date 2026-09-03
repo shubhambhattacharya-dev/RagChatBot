@@ -1,0 +1,128 @@
+[
+  {
+    "id": "G01",
+    "category": "exact_fact_person",
+    "question": "Who wrote Attention Is All You Need?",
+    "documentId": null,
+    "expected_answer_terms": ["vaswani"],
+    "expected_source": "attention.pdf",
+    "notes": "Author lookup — tests owner/metadata + lexical anchor"
+  },
+  {
+    "id": "G02",
+    "category": "exact_fact_number",
+    "question": "How many attention heads are used in the Transformer?",
+    "documentId": null,
+    "expected_answer_terms": ["8"],
+    "expected_source": "attention.pdf",
+    "notes": "Numeric extraction"
+  },
+  {
+    "id": "G03",
+    "category": "exact_fact_number",
+    "question": "How many encoder layers are used?",
+    "documentId": null,
+    "expected_answer_terms": ["6"],
+    "expected_source": "attention.pdf",
+    "notes": "Numeric extraction"
+  },
+  {
+    "id": "G04",
+    "category": "exact_fact_term",
+    "question": "What optimizer is used for training?",
+    "documentId": null,
+    "expected_answer_terms": ["adam"],
+    "expected_source": "attention.pdf",
+    "notes": "Technical term retrieval"
+  },
+  {
+    "id": "G05",
+    "category": "conceptual",
+    "question": "What architecture is proposed in the paper?",
+    "documentId": null,
+    "expected_answer_terms": ["transformer"],
+    "expected_source": "attention.pdf",
+    "notes": "Semantic match — vector path"
+  },
+  {
+    "id": "G06",
+    "category": "conceptual",
+    "question": "What replaces recurrence in the proposed model?",
+    "documentId": null,
+    "expected_answer_terms": ["self-attention"],
+    "expected_source": "attention.pdf",
+    "notes": "Semantic match — vector path"
+  },
+  {
+    "id": "G07",
+    "category": "person_contact",
+    "question": "What is Manish's email address?",
+    "documentId": null,
+    "expected_answer_terms": ["@"],
+    "expected_source": "manish.pdf",
+    "notes": "Contact retrieval — query expansion path"
+  },
+  {
+    "id": "G08",
+    "category": "person_summary",
+    "question": "Who is Manish?",
+    "documentId": null,
+    "expected_answer_terms": ["manish"],
+    "expected_source": "manish.pdf",
+    "notes": "Person-summary expansion path"
+  },
+  {
+    "id": "G09",
+    "category": "person_contact",
+    "question": "What projects does Shubham have?",
+    "documentId": null,
+    "expected_answer_terms": ["project"],
+    "expected_source": "shubham.pdf",
+    "notes": "Portfolio query — projects expansion"
+  },
+  {
+    "id": "G10",
+    "category": "person_contact",
+    "question": "What skills does Shubham have?",
+    "documentId": null,
+    "expected_answer_terms": ["skill"],
+    "expected_source": "shubham.pdf",
+    "notes": "Skills section retrieval"
+  },
+  {
+    "id": "G11",
+    "category": "grounded_refusal",
+    "question": "What is the capital of France?",
+    "documentId": null,
+    "expected_answer_terms": [],
+    "expected_refusal": true,
+    "notes": "Out-of-corpus — must refuse (anti-hallucination gate)"
+  },
+  {
+    "id": "G12",
+    "category": "grounded_refusal",
+    "question": "What is the weather forecast for tomorrow in Vadodara?",
+    "documentId": null,
+    "expected_answer_terms": [],
+    "expected_refusal": true,
+    "notes": "Out-of-corpus — must refuse (anti-hallucination gate)"
+  },
+  {
+    "id": "G13",
+    "category": "conceptual",
+    "question": "What is self-attention and why does it matter?",
+    "documentId": null,
+    "expected_answer_terms": ["attention"],
+    "expected_source": "attention.pdf",
+    "notes": "Open conceptual — grounded generation"
+  },
+  {
+    "id": "G14",
+    "category": "grounded_refusal",
+    "question": "Which technique handles short exact queries better: vector search or lexical search?",
+    "documentId": null,
+    "expected_answer_terms": [],
+    "expected_refusal": true,
+    "notes": "HARDEST grounding test: the LLM knows this answer from training data (lexical search), but it is NOT in the indexed corpus. A grounded system must refuse anyway — answering from model memory is hallucination. If this passes, the grounding gate holds even against the model's own knowledge."
+  }
+]

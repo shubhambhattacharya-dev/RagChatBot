@@ -1,0 +1,322 @@
+{
+  "metrics": {
+    "evaluated_at": "2026-09-03T07:32:53.411Z",
+    "api_base": "https://ragchatbot-61jh.onrender.com",
+    "total_cases": 14,
+    "answer_accuracy": 1,
+    "refusal_accuracy_grounding": 1,
+    "source_attribution": 1,
+    "latency_p50_ms": 24791,
+    "latency_p95_ms": 35204,
+    "mean_latency_ms": 23171,
+    "failures": []
+  },
+  "results": [
+    {
+      "id": "G01",
+      "category": "exact_fact_person",
+      "question": "Who wrote Attention Is All You Need?",
+      "status": "pass",
+      "latency_ms": 982,
+      "latency_breakdown_ms": {
+        "ttfb": 158,
+        "total": 982
+      },
+      "answer_snippet": "The paper **“Attention Is All You Need”** was authored by:\n\n- Ashish Vaswani  \n- Noam Shazeer  \n- Niki Parmar  \n- Jakob Uszkoreit  \n- Llion Jones  \n- Aidan N. G",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "vaswani"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G02",
+      "category": "exact_fact_number",
+      "question": "How many attention heads are used in the Transformer?",
+      "status": "pass",
+      "latency_ms": 14628,
+      "latency_breakdown_ms": {
+        "ttfb": 92,
+        "total": 14628
+      },
+      "answer_snippet": "The Transformer uses **8 parallel attention heads** (h = 8) in its multi‑head attention mechanism【1†L7-L10】【4†L13-L16】.",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "8"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G03",
+      "category": "exact_fact_number",
+      "question": "How many encoder layers are used?",
+      "status": "pass",
+      "latency_ms": 35204,
+      "latency_breakdown_ms": {
+        "ttfb": 93,
+        "total": 35204
+      },
+      "answer_snippet": "The encoder is built from a stack of **N = 6 identical layers**【1†L1-L4】【2†L1-L4】.",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "6"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G04",
+      "category": "exact_fact_term",
+      "question": "What optimizer is used for training?",
+      "status": "pass",
+      "latency_ms": 29255,
+      "latency_breakdown_ms": {
+        "ttfb": 95,
+        "total": 29255
+      },
+      "answer_snippet": "The models were trained using the **Adam optimizer** (β₁ = 0.9, β₂ = 0.98, ε = 10⁻⁹)【1†L2-L4】【2†L1-L3】.",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "adam"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G05",
+      "category": "conceptual",
+      "question": "What architecture is proposed in the paper?",
+      "status": "pass",
+      "latency_ms": 31624,
+      "latency_breakdown_ms": {
+        "ttfb": 100,
+        "total": 31624
+      },
+      "answer_snippet": "The paper proposes the **Transformer** – an encoder‑decoder architecture that relies entirely on attention mechanisms and contains no recurrent or convolutional",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "transformer"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G06",
+      "category": "conceptual",
+      "question": "What replaces recurrence in the proposed model?",
+      "status": "pass",
+      "latency_ms": 33578,
+      "latency_breakdown_ms": {
+        "ttfb": 291,
+        "total": 33578
+      },
+      "answer_snippet": "The Transformer removes recurrent layers entirely and substitutes them with an attention‑only architecture—specifically, multi‑head self‑attention mechanisms ar",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "self-attention"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G07",
+      "category": "person_contact",
+      "question": "What is Manish's email address?",
+      "status": "pass",
+      "latency_ms": 19992,
+      "latency_breakdown_ms": {
+        "ttfb": 100,
+        "total": 19992
+      },
+      "answer_snippet": "Manish’s email address is **bhattacharya.manish8@gmail.com**【1†L4-L6】.",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "manish.pdf",
+        "shubham.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "@"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G08",
+      "category": "person_summary",
+      "question": "Who is Manish?",
+      "status": "pass",
+      "latency_ms": 18199,
+      "latency_breakdown_ms": {
+        "ttfb": 99,
+        "total": 18199
+      },
+      "answer_snippet": "Manish Bhattacharya is a security‑focused engineer and technologist. He is currently the **Staff Security Engineer at Crossmint** (Miami, FL, remote), where he ",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "manish.pdf",
+        "shubham.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "manish"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G09",
+      "category": "person_contact",
+      "question": "What projects does Shubham have?",
+      "status": "pass",
+      "latency_ms": 28829,
+      "latency_breakdown_ms": {
+        "ttfb": 114,
+        "total": 28829
+      },
+      "answer_snippet": "Shubham’s portfolio includes three main projects:\n\n1. **AI Ops – Enterprise AI Tools** – a Node.js/TypeScript backend that implements a custom ReAct orchestrati",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "shubham.pdf",
+        "manish.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "project"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G10",
+      "category": "person_contact",
+      "question": "What skills does Shubham have?",
+      "status": "pass",
+      "latency_ms": 24791,
+      "latency_breakdown_ms": {
+        "ttfb": 113,
+        "total": 24791
+      },
+      "answer_snippet": "Shubham’s skills include:\n\n- **Languages:** TypeScript, JavaScript (Node.js), SQL  \n- **Backend & API:** Express.js, Next.js, REST API Design, Middleware, JWT A",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "shubham.pdf",
+        "manish.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "skill"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G11",
+      "category": "grounded_refusal",
+      "question": "What is the capital of France?",
+      "status": "pass",
+      "latency_ms": 5789,
+      "latency_breakdown_ms": {
+        "ttfb": 181,
+        "total": 5789
+      },
+      "answer_snippet": "I couldn't find this in the documents.",
+      "refused": true,
+      "expected_refusal": true,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": null,
+      "terms_hit": [],
+      "terms_missed": []
+    },
+    {
+      "id": "G12",
+      "category": "grounded_refusal",
+      "question": "What is the weather forecast for tomorrow in Vadodara?",
+      "status": "pass",
+      "latency_ms": 7917,
+      "latency_breakdown_ms": {
+        "ttfb": 97,
+        "total": 7917
+      },
+      "answer_snippet": "I couldn't find this in the documents.",
+      "refused": true,
+      "expected_refusal": true,
+      "sources": [
+        "shubham.pdf"
+      ],
+      "source_correct": null,
+      "terms_hit": [],
+      "terms_missed": []
+    },
+    {
+      "id": "G13",
+      "category": "conceptual",
+      "question": "What is self-attention and why does it matter?",
+      "status": "pass",
+      "latency_ms": 32572,
+      "latency_breakdown_ms": {
+        "ttfb": 100,
+        "total": 32572
+      },
+      "answer_snippet": "**Self‑attention** (also called intra‑attention) is an attention mechanism that relates every position of a single sequence to every other position in order to ",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": true,
+      "terms_hit": [
+        "attention"
+      ],
+      "terms_missed": []
+    },
+    {
+      "id": "G14",
+      "category": "grounded_refusal",
+      "question": "Which technique handles short exact queries better: vector search or lexical search?",
+      "status": "pass",
+      "latency_ms": 41031,
+      "latency_breakdown_ms": {
+        "ttfb": 140,
+        "total": 41031
+      },
+      "answer_snippet": "I couldn't find this in the documents.",
+      "refused": true,
+      "expected_refusal": true,
+      "sources": [
+        "attention.pdf"
+      ],
+      "source_correct": null,
+      "terms_hit": [],
+      "terms_missed": []
+    }
+  ]
+}
