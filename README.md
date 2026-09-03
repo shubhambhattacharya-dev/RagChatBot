@@ -2,7 +2,7 @@
 
 > Retrieval-Augmented Generation over PDF documents with hybrid search, anti-hallucination grounding, and real-time streaming.
 
-**Live Demo:** [ragchatbot-1-wtzd.onrender.com](https://ragchatbot-1-wtzd.onrender.com/)
+**Live Demo:** [ragchatbot-61jh.onrender.com](https://ragchatbot-61jh.onrender.com/)
 
 ---
 
@@ -411,7 +411,7 @@ See [DEPLOY.md](DEPLOY.md) for the complete production deployment guide.
 **Shubham Bhattacharya** — Backend Engineer (Node.js/TypeScript) with Applied AI focus
 
 - GitHub: [shubhambhattacharya-dev](https://github.com/shubhambhattacharya-dev)
-- Email: get.input.2025@gmail.com
+- Email: [shubhambhattacharya107@gmail.com](mailto:shubhambhattacharya107@gmail.com)
 
 ---
 
