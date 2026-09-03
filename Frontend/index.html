@@ -1,232 +1,269 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RAG ChatBot — Document Intelligence Platform</title>
+  <title>RAG Chat — Grounded Document Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
 
-  
-
-  <!-- Toast Container -->
+  <!-- Toast Notifications -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <!-- App Container -->
-  <div id="app">
+  <!-- App Wrapper -->
+  <div id="app" class="app-layout">
 
-    <!-- ==================== Sidebar ==================== -->
-    <aside id="sidebar" class="glass-panel">
+    <!-- ==================== SIDEBAR ==================== -->
+    <aside id="sidebar" class="sidebar">
+      
+      <!-- Sidebar Header -->
       <div class="sidebar-header">
-        <a href="#" class="logo">
-          <div class="logo-icon minimal-icon-box">
+        <div class="brand-group">
+          <div class="brand-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3L2 7L12 11L22 7L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                stroke-linejoin="round" />
-              <path d="M2 17L12 21L22 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                stroke-linejoin="round" />
-              <path d="M2 12L12 16L22 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                stroke-linejoin="round" />
+              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M2 17L12 22L22 17" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M2 12L12 17L22 12" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
-          <div class="logo-text-wrapper">
-            <span class="logo-text">RAG <span class="logo-accent">ChatBot</span></span>
-            <span class="logo-sub">INTELLIGENCE PLATFORM</span>
+          <div class="brand-text">
+            <span class="brand-title">RAG</span>
+            <span class="brand-sub">INTELLIGENCE</span>
           </div>
-        </a>
+        </div>
+        <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Toggle sidebar" aria-label="Toggle sidebar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
       </div>
 
-      <!-- Upload Section -->
+      <!-- Section: Knowledge Base -->
       <div class="sidebar-section">
-        <div class="section-label">
-          <span>KNOWLEDGE BASE</span>
-          <span class="minimal-badge">ACTIVE</span>
+        <div class="section-title-row">
+          <span class="section-title">KNOWLEDGE BASE</span>
+          <button class="section-icon-btn" id="addDocBtn" title="Upload document" aria-label="Upload document">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
         </div>
 
-        <div class="drop-zone tilt-card" id="dropZone" role="button" tabindex="0" aria-label="Upload documents">
-          <div class="drop-zone-content">
-            <div class="drop-icon-wrapper">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3V15M12 3L7 8M12 3L17 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                  stroke-linejoin="round" />
-                <path d="M3 15V18C3 19.6569 4.34315 21 6 21H18C19.6569 21 21 19.6569 21 18V15" stroke="currentColor"
-                  stroke-width="1.8" stroke-linecap="round" opacity="0.6" />
-              </svg>
-            </div>
-            <span class="drop-text">Drop files or <strong>browse</strong></span>
-            <span class="drop-hint">PDF, DOCX, TXT, MD</span>
+        <!-- Large Upload Box matching reference image -->
+        <div class="large-upload-card" id="dropZone" role="button" tabindex="0" aria-label="Upload documents">
+          <div class="upload-icon-circle">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 16V4M12 4L7 9M12 4L17 9"/>
+              <path d="M4 17V19C4 20.1046 4.89543 21 6 21H18C19.1046 21 20 20.1046 20 19V17"/>
+            </svg>
           </div>
+          <span class="upload-main-title">Upload documents</span>
+          <span class="upload-sub-text">PDF, DOCX, TXT, MD</span>
+          <span class="upload-sub-text">or drag & drop</span>
           <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md" hidden multiple />
         </div>
 
-        <div id="fileList" class="file-list"></div>
+        <!-- Live Upload Progress List -->
+        <div id="fileList" class="upload-progress-list"></div>
 
-        <!-- Saved documents -->
-        <div class="docs-label-row">
-          <span class="section-label">DOCUMENTS</span>
-          <span class="docs-count" id="docsCount">0</span>
+        <!-- Empty Documents State (when no docs) -->
+        <div id="emptyDocsState" class="empty-docs-container">
+          <div class="empty-docs-icon-box">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+            </svg>
+          </div>
+          <span class="empty-docs-title">No documents yet</span>
+          <span class="empty-docs-desc">Upload your documents to<br>get started.</span>
         </div>
-        <div id="docList" class="doc-list"></div>
+
+        <!-- Indexed Documents List (when docs exist) -->
+        <div id="docList" class="doc-list-group" hidden></div>
+        <span class="sr-only" id="docsCount">0</span>
       </div>
 
-      <!-- Chat History -->
-      <div class="sidebar-section sidebar-section-history">
-        <div class="section-label">HISTORY</div>
-        <div id="historyList" class="history-list">
-          <div class="empty-state">
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2" />
-              <path d="M8 5V8.5L10 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+      <!-- Section: Conversations -->
+      <div class="sidebar-section conversation-section">
+        <div class="section-title-row">
+          <span class="section-title">CONVERSATIONS</span>
+          <button class="section-icon-btn" id="newConversationBtn" title="Start new conversation" aria-label="Start new conversation">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             </svg>
-            <span>No conversations recorded</span>
-          </div>
+          </button>
+        </div>
+        <div id="historyList" class="history-list-group">
+          <!-- Populated by app.js -->
         </div>
       </div>
 
       <!-- Sidebar Footer -->
       <div class="sidebar-footer">
-        <div class="status-indicator">
-          <span class="status-dot" id="statusDot"></span>
-          <span class="status-label" id="statusLabel">Connecting...</span>
-        </div>
-        <div class="sidebar-actions">
-          <button class="icon-button" id="settingsBtn" title="Settings">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="2.5" stroke="currentColor" stroke-width="1.2" />
-              <path
-                d="M7 0.5V2.5M7 11.5V13.5M13.5 7H11.5M2.5 7H0.5M11.5 2.5L10 4M4 10L2.5 11.5M11.5 11.5L10 10M4 4L2.5 2.5"
-                stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+        <div class="sidebar-status-box">
+          <div class="status-col">
+            <div class="status-indicator-line">
+              <span class="status-dot connected" id="statusDot"></span>
+              <span class="status-label" id="statusLabel">Connected</span>
+            </div>
+            <div class="engine-indicator-line">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shield-icon">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span class="engine-label">Grounded Engine</span>
+            </div>
+          </div>
+          <button class="info-btn" id="infoBtn" title="Engine Information" aria-label="Engine Information">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
           </button>
         </div>
       </div>
     </aside>
 
-    <!-- ==================== Main Chat Area ==================== -->
-    <main id="main">
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <main id="main" class="main-content">
 
-      <!-- Chat Header -->
-      <header id="chatHeader" class="glass-header">
-        <div class="header-info">
+      <!-- Top Header -->
+      <header id="chatHeader" class="main-header">
+        <div class="header-left">
           <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle sidebar">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
             </svg>
           </button>
-          <div class="header-title-box">
-            <div class="minimal-pulse-dot"></div>
-            <div>
-              <h1 class="header-title">RAG ChatBot <span class="badge-minimal">Grounded Engine</span></h1>
-              <p class="header-subtitle">Vector & Lexical Hybrid Search · Grounded Engine · <span class="accent-text">100% Eval-Verified</span></p>
+          <div class="header-titles">
+            <div class="header-title-line">
+              <h1 class="header-main-title" aria-label="RAG ChatBot Intelligence">
+                RAG Chat
+              </h1>
+              <span class="badge-grounded">Grounded Engine</span>
             </div>
+            <p class="header-subtitle">Hybrid Search · Grounded Answers · Citations</p>
           </div>
         </div>
-        <div class="header-actions">
-          <button id="clearChat" class="ghost-button minimal-btn" title="Reset Conversation">
-            <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
-              <path
-                d="M2 4H13M4.5 4V2.5C4.5 2.22 4.72 2 5 2H10C10.28 2 10.5 2.22 10.5 2.5V4M11.5 4V12.5C11.5 12.78 11.28 13 11 13H4C3.72 13 3.5 12.78 3.5 12.5V4"
-                stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+
+        <div class="header-right">
+          <!-- Theme Toggle (Light / Dark) -->
+          <button class="theme-toggle-btn" id="themeToggleBtn" title="Switch to Dark Mode" aria-label="Toggle color theme">
+            <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
             </svg>
-            <span>Clear</span>
+            <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
           </button>
+
+          <!-- Clear / Reset Chat action (hidden visually or styled) -->
+          <button id="clearChat" class="sr-only" aria-label="Clear chat">Clear</button>
+
+          <!-- User Avatar -->
+          <div class="user-avatar" title="Shubham (User Profile)" aria-label="User Profile">
+            <span>SB</span>
+          </div>
         </div>
       </header>
 
-      <!-- Messages Container -->
-      <div id="messages" class="messages-container">
-        <div class="welcome-screen tilt-card" id="welcomeScreen">
+      <!-- Scrollable Message View -->
+      <div id="messages" class="messages-scroll-area">
 
-          <!-- Minimalist Icon -->
-          <div class="minimal-graphic aurora-glow-icon">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                stroke-linejoin="round" />
-              <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                stroke-linejoin="round" />
-              <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                stroke-linejoin="round" />
-            </svg>
-          </div>
+        <!-- Center Hero Question Input Box (Shown only in Welcome / Empty State) -->
+        <div class="welcome-container" id="welcomeScreen">
+          <div class="hero-input-card" id="heroInputContainer">
+            <label class="sr-only" for="chatInput">Ask a question about your documents</label>
+            <textarea id="chatInput" rows="2" placeholder="Ask a question about your documents..." autofocus></textarea>
+            
+            <div class="hero-input-bottom">
+              <div class="hero-input-left">
+                <!-- Search Mode Dropdown -->
+                <div class="dropdown-wrapper" id="searchModeDropdown">
+                  <button type="button" class="filter-pill-btn" id="searchModeBtn" aria-haspopup="true" aria-expanded="false">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <polygon points="6 3 18 3 22 9 12 22 2 9" />
+                    </svg>
+                    <span id="currentSearchModeText">Hybrid Search</span>
+                    <svg class="chevron-icon" width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div class="dropdown-menu" id="searchModeMenu" role="menu">
+                    <div class="dropdown-item active" data-value="hybrid">💎 Hybrid Search</div>
+                    <div class="dropdown-item" data-value="vector">⚡ Semantic Vector</div>
+                    <div class="dropdown-item" data-value="lexical">📝 Keyword BM25</div>
+                  </div>
+                </div>
 
-          <h2 class="welcome-title">RAG ChatBot Intelligence</h2>
-          <p class="welcome-desc">Upload PDFs, Word docs, or text files to start exploring your documents with grounded
-            neural retrieval.</p>
-          <div class="welcome-examples">
-              <button class="example-chip" data-q="Who wrote Attention Is All You Need?">Who wrote this paper?</button>
-              <button class="example-chip" data-q="What is Manish's email address?">Find a contact detail</button>
-              <button class="example-chip" data-q="What projects does Shubham have?">Scan a resume</button>
-            </div>
+                <!-- Top K Dropdown -->
+                <div class="dropdown-wrapper" id="topKDropdown">
+                  <button type="button" class="filter-pill-btn" id="topKBtn" aria-haspopup="true" aria-expanded="false">
+                    <span id="currentTopKText">Top K: 6</span>
+                    <svg class="chevron-icon" width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div class="dropdown-menu" id="topKMenu" role="menu">
+                    <div class="dropdown-item" data-value="3">Top K: 3</div>
+                    <div class="dropdown-item" data-value="4">Top K: 4</div>
+                    <div class="dropdown-item active" data-value="6">Top K: 6</div>
+                    <div class="dropdown-item" data-value="8">Top K: 8</div>
+                    <div class="dropdown-item" data-value="10">Top K: 10</div>
+                  </div>
+                </div>
+              </div>
 
-          <div class="welcome-tips">
-            <div class="tip-card tilt-card">
-              <div class="tip-icon-box">
-                <span class="animated-icon">📄</span>
-              </div>
-              <div class="tip-content">
-                <div class="tip-title">Hybrid Vector Search</div>
-                <div class="tip-text">pgvector cosine similarity + Full-text lexical search</div>
-              </div>
-            </div>
-            <div class="tip-card tilt-card">
-              <div class="tip-icon-box">
-                <span class="animated-icon">🛡️</span>
-              </div>
-              <div class="tip-content">
-                <div class="tip-title">Anti-Hallucination Gate</div>
-                <div class="tip-text">Strict distance gating (≤ 0.5) ensures factual answers</div>
-              </div>
-            </div>
-            <div class="tip-card tilt-card">
-              <div class="tip-icon-box">
-                <span class="animated-icon">⚡</span>
-              </div>
-              <div class="tip-content">
-                <div class="tip-title">Real-Time Streaming</div>
-                <div class="tip-text">Token-by-token SSE streaming with source citations</div>
+              <div class="hero-input-right">
+                <button class="tool-icon-btn" id="attachBtn" title="Attach Document" aria-label="Attach Document">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button id="stopBtn" class="stop-pill-btn" title="Stop response" aria-label="Stop response" hidden>
+                  Stop
+                </button>
+                <button id="sendBtn" class="send-action-btn" disabled aria-label="Send query">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Active Messages Flow (Populated when conversation begins) -->
+        <div id="activeMessagesContainer" class="messages-container-active" style="display: none;"></div>
+
       </div>
 
-      <!-- Static Pinned Input Bar -->
-      <div id="inputArea" class="static-input-bar">
-        <div class="input-container">
-          <div class="input-wrapper" id="inputWrapper">
-          <label class="sr-only" for="chatInput">Ask a question about your documents</label>
-          <textarea id="chatInput" rows="1" placeholder="Ask a question about your documents..." autofocus></textarea>
-            <div class="input-actions">
-              <button class="attach-btn minimal-btn" id="attachBtn" title="Attach Document" aria-label="Attach Document">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
-                    stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-              <button id="stopBtn" class="stop-button minimal-btn" title="Stop response" aria-label="Stop response" hidden>
-                Stop
-              </button>
-              <button id="sendBtn" class="send-button minimal-send-btn" disabled aria-label="Send query">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="white" stroke-width="1.8"
-                    stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="input-footer">
-            <span>Press <kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for new line</span>
-            <div class="model-badges">
-              <span class="model-badge">Groq Llama 3.3 70B</span>
-              <span class="model-badge">Gemini 768-dim</span>
-            </div>
+      <!-- Follow-up Bottom Input Bar (Visible only when conversation is active) -->
+      <div id="followUpBar" class="followup-bottom-bar" style="display: none;">
+        <div class="followup-card">
+          <button class="tool-icon-btn followup-attach" id="followUpAttachBtn" title="Attach Document" aria-label="Attach Document">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <label class="sr-only" for="followUpInput">Ask a follow-up question</label>
+          <textarea id="followUpInput" rows="1" placeholder="Ask a follow-up question..."></textarea>
+          <div class="followup-right">
+            <span class="followup-hint">Shift + Enter to send</span>
+            <button id="followUpSendBtn" class="send-action-btn followup-send-btn" disabled aria-label="Send follow-up">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -235,6 +272,7 @@
       <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
     </main>
+
   </div>
 
   <script src="app.js"></script>
