@@ -3,6 +3,7 @@ import {
   expandQuery,
   getPersonLookupTerm,
   buildLexicalTsQuery,
+  buildDocFilter,
   mergeRetrievalResults,
   TOP_K,
   MAX_DISTANCE,
@@ -677,5 +678,46 @@ describe("mergeRetrievalResults", () => {
       const result = mergeRetrievalResults(exact, lexical, vector);
       expect(result).toHaveLength(0);
     });
+  });
+});
+
+// ─── buildDocFilter (ownership scoping) ─────────────────────────────────────
+
+describe("buildDocFilter", () => {
+  test("scopes every query to the signed-in owner", () => {
+    const filter = buildDocFilter("user-1");
+    expect(filter.sql).toContain('d."ownerId"');
+    expect(filter.values).toContain("user-1");
+    expect(filter.sql).toContain("d.status = 'READY'");
+  });
+
+  test("quotes the camelCase ownerId column (regression: Postgres folds unquoted identifiers to lowercase)", () => {
+    // Regression for: `column d.ownerid does not exist` — an unquoted
+    // d.ownerId in raw SQL silently breaks every chat retrieval query while
+    // the typecheck stays green.
+    const filter = buildDocFilter("user-1");
+    // The broken pattern is a bare `d.ownerid` (no quote between d. and the name).
+    expect(filter.sql).not.toMatch(/d\.ownerid/i);
+    expect(filter.sql).toContain('d."ownerId"');
+  });
+
+  test("does not reference a document when none is given", () => {
+    const filter = buildDocFilter("user-1");
+    expect(filter.sql).not.toContain('"documentId"');
+  });
+
+  test("narrows to one document when documentId is provided", () => {
+    const filter = buildDocFilter("user-1", "doc-9");
+    expect(filter.sql).toContain('c."documentId"');
+    expect(filter.values).toEqual(expect.arrayContaining(["doc-9", "user-1"]));
+  });
+
+  test("owner and document filters are parameterized, not interpolated", () => {
+    const filter = buildDocFilter("'; DROP TABLE \"Document\"; --", "doc-9");
+    const inlined = filter.values.filter((v) => typeof v === "string").join(" ");
+    expect(inlined).toContain("DROP TABLE");
+    // The hostile string must only appear as a bound parameter value,
+    // never inside the SQL text itself.
+    expect(filter.sql).not.toContain("DROP TABLE");
   });
 });

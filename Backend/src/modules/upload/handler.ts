@@ -95,13 +95,14 @@ export async function handleUpload(
       }
     );
 
-    // 5. Save metadata
+    // 5. Save metadata — owned by the signed-in user
     await prisma.document.create({
       data: {
         id: documentId,
         filename: storedFilename,
         mimeType: file.mimetype,
         fileKey,
+        ownerId: request.user!.id,
         status: "QUEUED",
       },
     });

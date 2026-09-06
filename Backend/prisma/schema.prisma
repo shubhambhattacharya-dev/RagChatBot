@@ -13,28 +13,44 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id            String         @id @default(uuid())
+  googleId      String         @unique
+  email         String         @unique
+  name          String?
+  picture       String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  documents     Document[]
+  conversations Conversation[]
+}
+
 model Document{
   id String @id @default(uuid())
   filename String
   mimeType String
   status String @default("QUEUED")
   fileKey String
+  ownerId String?
+  owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   chunks Chunk[]
   @@index([status])
   @@index([createdAt])
   @@index([updatedAt])
+  @@index([ownerId])
 }
 
 model Conversation {
   id        String        @id @default(uuid())
-  sessionId String
+  userId    String?
+  user      User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   messages  ChatMessage[]
 
-  @@index([sessionId, updatedAt])
+  @@index([userId, updatedAt])
 }
 
 model ChatMessage {

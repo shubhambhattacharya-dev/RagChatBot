@@ -22,9 +22,16 @@ const questions: Q[] = JSON.parse(
   readFileSync(join(__dirname, "questions.json"), "utf8")
 );
 
+// /chat requires a signed-in session. Set API_COOKIE to the signed session
+// cookie value (e.g. `rag_user=<value>.<signature>` from a logged-in browser)
+// when running these tests against an auth-enabled server.
+const API_COOKIE = process.env.API_COOKIE ?? "";
+
 // Collect SSE events from GET /chat?question=...
 async function chat(question: string): Promise<{ tokens: string; sources: string[]; warnings: string[] }> {
-  const res = await fetch(`${BASE}/chat?question=${encodeURIComponent(question)}`);
+  const res = await fetch(`${BASE}/chat?question=${encodeURIComponent(question)}`, {
+    headers: API_COOKIE ? { Cookie: API_COOKIE } : {},
+  });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

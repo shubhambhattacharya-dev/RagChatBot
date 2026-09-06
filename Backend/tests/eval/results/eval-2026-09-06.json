@@ -1,0 +1,378 @@
+{
+  "metrics": {
+    "evaluated_at": "2026-09-06T13:32:59.877Z",
+    "api_base": "http://localhost:3000",
+    "total_cases": 14,
+    "answer_accuracy": 0,
+    "refusal_accuracy_grounding": 0,
+    "source_attribution": 0,
+    "faithfulness": null,
+    "answer_relevance": null,
+    "judge_cases": 0,
+    "latency_p50_ms": 90000,
+    "latency_p95_ms": 90000,
+    "mean_latency_ms": 90000,
+    "failures": [
+      "G01",
+      "G02",
+      "G03",
+      "G04",
+      "G05",
+      "G06",
+      "G07",
+      "G08",
+      "G09",
+      "G10",
+      "G11",
+      "G12",
+      "G13",
+      "G14"
+    ]
+  },
+  "results": [
+    {
+      "id": "G01",
+      "category": "exact_fact_person",
+      "question": "Who wrote Attention Is All You Need?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "vaswani"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G02",
+      "category": "exact_fact_number",
+      "question": "How many attention heads are used in the Transformer?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "8"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G03",
+      "category": "exact_fact_number",
+      "question": "How many encoder layers are used?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "6"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G04",
+      "category": "exact_fact_term",
+      "question": "What optimizer is used for training?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "adam"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G05",
+      "category": "conceptual",
+      "question": "What architecture is proposed in the paper?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "transformer"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G06",
+      "category": "conceptual",
+      "question": "What replaces recurrence in the proposed model?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "self-attention"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G07",
+      "category": "person_contact",
+      "question": "What is Manish's email address?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "@"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G08",
+      "category": "person_summary",
+      "question": "Who is Manish?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "manish"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G09",
+      "category": "person_contact",
+      "question": "What projects does Shubham have?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "project"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G10",
+      "category": "person_contact",
+      "question": "What skills does Shubham have?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "skill"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G11",
+      "category": "grounded_refusal",
+      "question": "What is the capital of France?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": true,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G12",
+      "category": "grounded_refusal",
+      "question": "What is the weather forecast for tomorrow in Vadodara?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": true,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G13",
+      "category": "conceptual",
+      "question": "What is self-attention and why does it matter?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": false,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [
+        "attention"
+      ],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    },
+    {
+      "id": "G14",
+      "category": "grounded_refusal",
+      "question": "Which technique handles short exact queries better: vector search or lexical search?",
+      "status": "fail",
+      "latency_ms": 90000,
+      "latency_breakdown_ms": {
+        "ttfb": 90000,
+        "total": 90000
+      },
+      "answer_snippet": "",
+      "refused": false,
+      "expected_refusal": true,
+      "sources": [],
+      "source_correct": null,
+      "context_chunks_count": 0,
+      "faithfulness": null,
+      "answer_relevance": null,
+      "judge_reason": null,
+      "terms_hit": [],
+      "terms_missed": [],
+      "error": "Unable to connect. Is the computer able to access the url?"
+    }
+  ]
+}

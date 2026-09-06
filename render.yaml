@@ -43,3 +43,7 @@ services:
         sync: false                      # paste your Gemini key
       - key: OPENROUTER_API
         sync: false                      # paste your OpenRouter key (env requires it)
+      - key: GOOGLE_CLIENT_ID
+        sync: false                      # Google OAuth client id (sign-in)
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false                      # Google OAuth client secret

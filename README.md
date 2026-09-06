@@ -1,6 +1,6 @@
 # RagChatBot — Production RAG Document Intelligence
 
-> Retrieval-Augmented Generation over PDF documents with hybrid search, anti-hallucination grounding, and real-time streaming.
+> Retrieval-Augmented Generation over PDF documents with Google sign-in, per-user document ownership, hybrid search, anti-hallucination grounding, and real-time streaming.
 
 **Live Demo:** [ragchatbot-61jh.onrender.com](https://ragchatbot-61jh.onrender.com/)
 
@@ -46,6 +46,22 @@
 ---
 
 ## Key Features
+
+### Google Sign-In & Document Ownership
+
+Every visitor signs in with their Google account (Gmail-style account chooser). Uploads, chat retrieval, document listing, and deletion are all scoped to the signed-in owner:
+
+```
+Sign in with Google → OAuth 2.0 code flow → httpOnly signed session cookie
+                                                    ↓
+Upload / List / Delete / Chat → every query filtered by ownerId
+```
+
+- **OAuth 2.0 Authorization Code flow** implemented directly on `fetch` (no auth SDK dependency)
+- **CSRF-protected callback** — state parameter validated with a timing-safe comparison
+- **Session cookie** — signed, `httpOnly`, `SameSite=Lax`, `Secure` in production, 30-day lifetime
+- **404 (not 403) on other users' documents** — no cross-account existence leaks
+- Legacy documents uploaded before auth have no owner and stay invisible until re-uploaded
 
 ### Hybrid Retrieval
 
@@ -148,6 +164,11 @@ data: [DONE]
 - [Bun](https://bun.sh) v1.0+
 - [Docker](https://docker.com) (for local PostgreSQL + MinIO)
 - API keys: Gemini and Groq
+- Google OAuth credentials (sign-in):
+  1. Open [console.cloud.google.com](https://console.cloud.google.com) → **APIs & Services → OAuth consent screen** → create an app (External is fine)
+  2. **Credentials → Create Credentials → OAuth client ID → Web application**
+  3. Add redirect URI: `http://localhost:3000/auth/google/callback` (and your production URL, e.g. `https://your-app.onrender.com/auth/google/callback`)
+  4. Copy the client ID and secret into `.env`
 
 ### Local Development
 
@@ -185,6 +206,8 @@ GROQ_API=your-groq-api-key
 MINIO_ENDPOINT=http://localhost:9000
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
+GOOGLE_CLIENT_ID=your-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-oauth-client-secret
 
 # Optional
 OPENROUTER_API=your-openrouter-key  # Fallback for Groq
@@ -195,6 +218,17 @@ LOG_LEVEL=info
 ---
 
 ## API Endpoints
+
+### Authentication
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /auth/google` | Start Google OAuth (redirects to consent screen) |
+| `GET /auth/google/callback` | OAuth callback — sets the session cookie |
+| `GET /auth/me` | Current signed-in user (401 when signed out) |
+| `POST /auth/logout` | Clear the session cookie |
+
+All `/upload`, `/documents`, `/document/:id`, `/chat`, and `/conversations` endpoints require a signed-in session and are scoped to the owner.
 
 ### Upload Document
 
@@ -266,27 +300,22 @@ Response:
 
 ## Testing
 
-```bash
-# Unit tests (chunking, extraction, embedding, chat logic)
-bun run test
+The suite is layered like a production test pyramid — each layer catches a class of bug the layers above it cannot:
 
-# Integration tests (requires running database)
-RUN_INTEGRATION_TESTS=1 bun run test:integration
+| Layer | What it verifies | Command |
+|-------|------------------|---------|
+| **Unit** | Chunking, extraction, query expansion, RRF merge, auth helpers, SSE, timeouts, circuit breakers, rate limiter, ownership SQL shape | `bun run test` |
+| **Integration (real Postgres + pgvector)** | The chat pipeline's *actual raw SQL* against a live database: cross-user isolation for vector/lexical/owner search, owner-scoped conversation deletion | `RUN_INTEGRATION_TESTS=1 bun run test:integration` |
+| **Live retrieval / LLM** | Real Gemini embeddings, real Groq/Gemini inference | `RUN_LIVE_RETRIEVAL_TESTS=1 bun run test:retrieval` · `RUN_LIVE_LLM_TESTS=1 bun run test:llm` |
+| **E2E auth (live API)** | Every protected route 401s without a session, forged cookies are rejected, OAuth CSRF guard, public/protected route map | `RUN_E2E_TESTS=1 API_BASE=http://localhost:3001 bun test tests/e2e/auth.test.ts` |
+| **RAG eval (golden set)** | Answer accuracy, grounded refusals, source attribution, latency percentiles, plus LLM-as-judge **faithfulness** and **answer relevance** (RAGAS-style) | `API_BASE=... EVAL_COOKIE="rag_user=..." bun run test:eval` |
 
-# Live retrieval tests (requires database + embeddings)
-RUN_LIVE_RETRIEVAL_TESTS=1 bun run test:retrieval
+The verified offline run passed **249 tests with 0 failures**. Live, database, and
+provider tests are intentionally skipped unless their environment flags and
+external dependencies are configured.
 
-# Live LLM tests (requires API keys)
-RUN_LIVE_LLM_TESTS=1 bun run test:llm
-
-# End-to-end tests (full pipeline; requires a running API and indexed fixtures)
-RUN_E2E_TESTS=1 bun run test:e2e
-```
-
-The verified offline run passed **230 tests with 0 failures**. Thirty live,
-database, and provider tests are intentionally skipped unless their environment
-flags and external dependencies are configured. Live E2E tests require the
-regression documents to be indexed and `API_BASE` to point at the current server.
+> The eval harness and the live e2e RAG tests call `/chat`, which now requires a
+> session — pass the signed `rag_user` cookie via `EVAL_COOKIE` / `API_COOKIE`.
 
 ---
 
@@ -382,11 +411,23 @@ See [DEPLOY.md](DEPLOY.md) for the complete production deployment guide.
 
 ---
 
+## Interview Preparation
+
+See [INTERVIEW.md](INTERVIEW.md) for a comprehensive interview guide with:
+- 30-second elevator pitch
+- Top 15 interview questions with model answers
+- Deep dives into retrieval, chunking, and anti-hallucination
+- System design walkthrough
+- Code references for key components
+- Metrics and benchmarks to mention
+
+---
+
 ## Known Limitations
 
-- **No authentication or tenant isolation** — this is a shared, single-workspace MVP
-- **In-memory chat history** — conversations not persisted across page reloads
-- **Single-user optimization** — no concurrent user isolation
+- **Google account required** — all API routes are auth-gated; there is no anonymous/local bypass
+- **Cookie-based sessions are not server-revocable** — sign-out clears the client cookie; a signed-out cookie stays valid until expiry unless `SESSION_SECRET` is rotated
+- **Legacy documents are invisible** — rows uploaded before auth have `ownerId = null` and must be re-uploaded by their owner
 - **Scanned PDFs** — image-only PDFs require OCR, which is not included
 - **Provider availability** — model IDs and free-tier quotas can change
 - **Free tier constraints** — Render sleeps after 15min inactivity; UptimeRobot pings keep it alive
@@ -395,14 +436,16 @@ See [DEPLOY.md](DEPLOY.md) for the complete production deployment guide.
 
 ## Future Improvements
 
-- [ ] RAGAS evaluation metrics for answer quality measurement
+- [x] RAGAS-style evaluation metrics (LLM-as-judge faithfulness + answer relevance in the eval harness)
 - [ ] Structured logging with Pino + Sentry error tracking
-- [ ] Authentication and tenant isolation (JWT or managed identity provider)
-- [ ] Chat history persistence (PostgreSQL)
+- [ ] Server-side session store (Redis) for instant session revocation
+- [ ] Multi-turn conversation context fed back into the RAG prompt
 - [ ] Multi-file upload with progress tracking
 - [ ] Admin dashboard for document management
 - [x] Rate limiting per IP
 - [x] CI/CD pipeline (GitHub Actions)
+- [x] Authentication and tenant isolation (Google OAuth 2.0 + per-user document ownership)
+- [x] Chat history persistence (PostgreSQL)
 
 ---
 

@@ -10,6 +10,7 @@ import { ensureBucket } from "./config/minio";
 import { uploadRoutes } from "./modules/upload/router";
 import { statusRoutes } from "./modules/upload/status";
 import { chatRoutes } from "./modules/chat/routes";
+import { authRoutes } from "./modules/auth/routes";
 import { createWorker, documentQueue, enqueueDocument, redis } from "./config/redis";
 import prisma from "./config/prisma";
 import { processDocument } from "./modules/upload/processor";
@@ -101,7 +102,18 @@ export async function buildApp(){
       reply.header("X-Content-Type-Options", "nosniff");
       reply.header("X-Frame-Options", "DENY");
       reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
-      reply.header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'");
+      // fonts.googleapis.com serves the Google Fonts stylesheet the frontend
+      // links, fonts.gstatic.com the font files it references, and
+      // *.googleusercontent.com the Google profile photos shown in the user chip.
+      reply.header("Content-Security-Policy", [
+        "default-src 'self'",
+        "connect-src 'self'",
+        "img-src 'self' data: https://*.googleusercontent.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "script-src 'self'",
+        "frame-ancestors 'none'",
+      ].join("; "));
       if (env.NODE_ENV === "production") reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     });
     app.addHook("onRequest", async (request, reply) => {
@@ -115,6 +127,7 @@ export async function buildApp(){
       root: fileURLToPath(new URL("../../Frontend", import.meta.url)),
       prefix: "/",
     });
+    await app.register(authRoutes)
     await app.register(uploadRoutes)
     await app.register(statusRoutes)
     await app.register(chatRoutes)

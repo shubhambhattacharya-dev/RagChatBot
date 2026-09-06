@@ -28,6 +28,8 @@ export const EnvSchema=z.object({
     ALERT_WEBHOOK_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
     CHAT_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(30),
     UPLOAD_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(10),
+    GOOGLE_CLIENT_ID: z.string().default(""),
+    GOOGLE_CLIENT_SECRET: z.string().default(""),
 })
 
 const Parsed=EnvSchema.safeParse(process.env);
@@ -52,4 +54,12 @@ export function assertRuntimeConfig(): void {
   if (missing.length > 0) {
     throw new Error(`Missing required runtime configuration: ${missing.join(", ")}`);
   }
+  if (env.NODE_ENV === "production" && (!env.GOOGLE_CLIENT_ID.trim() || !env.GOOGLE_CLIENT_SECRET.trim())) {
+    throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production (Google sign-in)");
+  }
+}
+
+/** Google sign-in is optional in development but mandatory in production. */
+export function isGoogleOAuthConfigured(): boolean {
+  return env.GOOGLE_CLIENT_ID.trim().length > 0 && env.GOOGLE_CLIENT_SECRET.trim().length > 0;
 }

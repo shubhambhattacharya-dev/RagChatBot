@@ -23,7 +23,7 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
-      - run: bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat
+      - run: bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat tests/auth tests/utils tests/health
 
   deployment-smoke:
     name: Production health smoke test

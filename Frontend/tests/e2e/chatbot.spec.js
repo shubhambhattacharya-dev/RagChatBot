@@ -7,14 +7,34 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 let server;
 let baseURL;
+const deletedConversations = new Set();
+
+const sampleConversation = {
+  id: '1f0e6d2a-9c4b-4a3e-8b7d-2f5a9c8d1e2f',
+  createdAt: '2026-09-06T00:00:00.000Z',
+  updatedAt: '2026-09-06T00:00:00.000Z',
+  messages: [
+    { role: 'user', content: 'Delete me please', sources: null, documentId: null },
+    { role: 'assistant', content: 'Sure, this conversation can be deleted.', sources: [], documentId: null },
+  ],
+};
 
 test.beforeAll(async () => {
   server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost');
     response.setHeader('Content-Type', 'application/json');
     if (url.pathname === '/health') return response.end(JSON.stringify({ status: 'ok' }));
+    if (url.pathname === '/auth/me') {
+      return response.end(JSON.stringify({ id: 'user-1', email: 'test@example.com', name: 'Test User', picture: null }));
+    }
     if (url.pathname === '/documents') return response.end(JSON.stringify([]));
-    if (url.pathname === '/conversations') return response.end(JSON.stringify([]));
+    if (url.pathname === '/conversations') {
+      return response.end(JSON.stringify(deletedConversations.size > 0 ? [] : [sampleConversation]));
+    }
+    if (url.pathname.startsWith('/conversations/') && request.method === 'DELETE') {
+      deletedConversations.add(url.pathname.split('/')[2]);
+      return response.end(JSON.stringify({ message: 'Conversation deleted' }));
+    }
     if (url.pathname === '/upload' && request.method === 'POST') {
       return response.end(JSON.stringify({ documentId: '00000000-0000-4000-8000-000000000001', status: 'QUEUED' }));
     }
@@ -73,4 +93,19 @@ test('propagates an SSE error to the visible error message', async ({ page }) =>
   await page.getByLabel('Ask a question about your documents').fill('Trigger failure');
   await page.getByRole('button', { name: 'Send query' }).click();
   await expect(page.locator('.message-error')).toContainText('provider failed');
+});
+
+test('deletes a conversation from the sidebar after confirmation', async ({ page }) => {
+  await page.addInitScript((api) => { window.RAG_API_BASE = api; }, baseURL);
+  await page.goto(baseURL);
+
+  const item = page.locator('.conversation-item', { hasText: 'Delete me please' });
+  await expect(item).toBeVisible();
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await item.hover();
+  await item.getByLabel('Delete conversation').click();
+
+  await expect(item).toHaveCount(0);
+  await expect(page.getByText('Conversation deleted')).toBeVisible();
 });

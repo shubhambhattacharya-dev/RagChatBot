@@ -106,10 +106,18 @@ export function buildLexicalTsQuery(question: string): string | null {
   return terms.length > 0 ? terms.map((t) => `${t}:*`).join(" | ") : null;
 }
 
-export function buildDocFilter(documentId?: string): Prisma.Sql {
+/**
+ * Every search strategy must be scoped to the signed-in owner. `documentId`
+ * narrows further to one document; callers that pass a documentId they don't
+ * own simply match zero rows — no existence leak across users.
+ * NOTE: identifiers are quoted — Postgres folds unquoted ones to lowercase,
+ * and the Prisma-created column is the camelCase "ownerId".
+ */
+export function buildDocFilter(ownerId: string, documentId?: string): Prisma.Sql {
+  const ownerScope = Prisma.sql`d."ownerId" = ${ownerId} AND d.status = 'READY'`;
   return documentId
-    ? Prisma.sql`c."documentId" = ${documentId} AND d.status = 'READY'`
-    : Prisma.sql`d.status = 'READY'`;
+    ? Prisma.sql`c."documentId" = ${documentId} AND ${ownerScope}`
+    : ownerScope;
 }
 
 export function mergeRetrievalResults(

@@ -18,8 +18,8 @@ import {
 } from "./retrieval";
 import { databaseCircuitBreaker } from "../../utils/resilience";
 import { withSpan } from "../../observability";
-import { getSessionId } from "../../session";
-import { clearConversations, listConversations, saveConversation } from "./history";
+import { requireUser } from "../auth/routes";
+import { clearConversations, deleteConversation, listConversations, saveConversation } from "./history";
 
 const ChatQuerySchema = z.object({
   question: z.string().min(1, "Question is required").max(5000, "Question too long"),
@@ -33,7 +33,7 @@ const ChatBodySchema = z.object({
 
 const CHAT_TIMEOUT_MS = 60_000;
 
-async function handleChatInternal(question: string, reply: FastifyReply, sessionId: string, documentId?: string) {
+async function handleChatInternal(question: string, userId: string, reply: FastifyReply, documentId?: string) {
   setupSSE(reply);
   const abortController = new AbortController();
   const onDisconnect = () => abortController.abort();
@@ -54,7 +54,7 @@ Ask me any question about your uploaded documents.
     sendSSE(reply, { type: "token", content: greetingMsg });
     sendSSE(reply, { type: "sources", count: 0, documents: [], chunks: [] });
     sendSSEDone(reply);
-    await saveConversation(sessionId, question, greetingMsg, [], documentId);
+    await saveConversation(userId, question, greetingMsg, [], documentId);
     return;
   }
 
@@ -92,7 +92,7 @@ Ask me any question about your uploaded documents.
       message: "⚡ Searching pgvector database...",
     });
 
-    const docFilter = buildDocFilter(documentId);
+    const docFilter = buildDocFilter(userId, documentId);
     const vectorRows = await databaseCircuitBreaker.execute(() => withSpan("db.vector_search", { "db.operation": "vector_search" }, () => prisma.$queryRaw<SearchResult[]>`
       SELECT c.content, d.filename, c.embedding <=> ${vector}::vector AS distance
       FROM "Chunk" c
@@ -168,7 +168,7 @@ Ask me any question about your uploaded documents.
         type: "token",
         content: "I couldn't find relevant information in your uploaded documents. Please ask something covered by your uploaded files (e.g., author names, emails, projects, or paper details).",
       });
-      await saveConversation(sessionId, question, "I couldn't find relevant information in your uploaded documents.", [], documentId);
+      await saveConversation(userId, question, "I couldn't find relevant information in your uploaded documents.", [], documentId);
       return;
     }
 
@@ -196,7 +196,7 @@ Ask me any question about your uploaded documents.
         documents: sourceDocs,
         chunks: contextChunks,
       });
-      await saveConversation(sessionId, question, fullAnswer, sourceDocs, documentId);
+      await saveConversation(userId, question, fullAnswer, sourceDocs, documentId);
     }
 
   } catch (error: any) {
@@ -221,15 +221,15 @@ Ask me any question about your uploaded documents.
   }
 }
 
-function handleChat(question: string, reply: FastifyReply, sessionId: string, documentId?: string): Promise<void> {
+function handleChat(question: string, userId: string, reply: FastifyReply, documentId?: string): Promise<void> {
   return withSpan("chat.pipeline", {
     "chat.document_id": documentId || "global",
     "chat.question_length": question.length,
-  }, () => handleChatInternal(question, reply, sessionId, documentId));
+  }, () => handleChatInternal(question, userId, reply, documentId));
 }
 
 export async function chatRoutes(app: FastifyInstance) {
-  app.get("/chat", async (request, reply) => {
+  app.get("/chat", { preHandler: requireUser }, async (request, reply) => {
     const parsed = ChatQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -237,10 +237,10 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
     const { question, documentId } = parsed.data;
-    return handleChat(question, reply, getSessionId(request, reply), documentId);
+    return handleChat(question, request.user!.id, reply, documentId);
   });
 
-  app.post("/chat", async (request, reply) => {
+  app.post("/chat", { preHandler: requireUser }, async (request, reply) => {
     const parsed = ChatBodySchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.status(400).send({
@@ -248,15 +248,28 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
     const { question, documentId } = parsed.data;
-    return handleChat(question, reply, getSessionId(request, reply), documentId);
+    return handleChat(question, request.user!.id, reply, documentId);
   });
 
-  app.get("/conversations", async (request, reply) => {
-    return reply.send(await listConversations(getSessionId(request, reply)));
+  app.get("/conversations", { preHandler: requireUser }, async (request, reply) => {
+    return reply.send(await listConversations(request.user!.id));
   });
 
-  app.delete("/conversations", async (request, reply) => {
-    await clearConversations(getSessionId(request, reply));
+  app.delete("/conversations", { preHandler: requireUser }, async (request, reply) => {
+    await clearConversations(request.user!.id);
     return reply.send({ message: "Conversation history cleared" });
+  });
+
+  app.delete("/conversations/:id", { preHandler: requireUser }, async (request, reply) => {
+    const parsed = z.string().uuid().safeParse((request.params as { id?: string }).id);
+    if (!parsed.success) {
+      return reply.status(400).send({ message: "Invalid conversation id" });
+    }
+    const deleted = await deleteConversation(request.user!.id, parsed.data);
+    if (!deleted) {
+      // Same response for a missing id and someone else's conversation.
+      return reply.status(404).send({ message: "Conversation not found" });
+    }
+    return reply.send({ message: "Conversation deleted", id: parsed.data });
   });
 }

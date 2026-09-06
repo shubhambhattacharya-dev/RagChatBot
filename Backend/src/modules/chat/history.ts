@@ -1,7 +1,7 @@
 import prisma from "../../config/prisma";
 
 export async function saveConversation(
-  sessionId: string,
+  userId: string,
   question: string,
   answer: string,
   sources: string[],
@@ -9,7 +9,7 @@ export async function saveConversation(
 ): Promise<void> {
   await prisma.conversation.create({
     data: {
-      sessionId,
+      userId,
       messages: {
         create: [
           { role: "user", content: question, documentId },
@@ -20,9 +20,9 @@ export async function saveConversation(
   });
 }
 
-export async function listConversations(sessionId: string) {
+export async function listConversations(userId: string) {
   return prisma.conversation.findMany({
-    where: { sessionId },
+    where: { userId },
     orderBy: { updatedAt: "desc" },
     take: 50,
     select: {
@@ -37,6 +37,15 @@ export async function listConversations(sessionId: string) {
   });
 }
 
-export async function clearConversations(sessionId: string): Promise<void> {
-  await prisma.conversation.deleteMany({ where: { sessionId } });
+export async function clearConversations(userId: string): Promise<void> {
+  await prisma.conversation.deleteMany({ where: { userId } });
+}
+
+/** Deletes one conversation, scoped to its owner. Returns false when the id
+ *  doesn't exist or belongs to someone else — callers answer 404 either way. */
+export async function deleteConversation(userId: string, conversationId: string): Promise<boolean> {
+  const result = await prisma.conversation.deleteMany({
+    where: { id: conversationId, userId },
+  });
+  return result.count > 0;
 }

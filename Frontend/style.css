@@ -591,19 +591,24 @@ html, body {
   color: var(--text-secondary);
 }
 
-.conv-more-btn {
+.conv-delete-btn {
+  display: none;
   background: transparent;
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px;
   border-radius: 4px;
-  display: flex;
-  align-items: center;
+  flex-shrink: 0;
 }
 
-.conv-more-btn:hover {
-  color: var(--text-primary);
+.conversation-item:hover .conv-delete-btn {
+  display: flex;
+}
+
+.conv-delete-btn:hover {
+  color: var(--status-error);
+  background: var(--status-error-bg);
 }
 
 /* Sidebar Footer */
@@ -1401,7 +1406,6 @@ html, body {
   }
 }
 
-
 /* ===== v2.1 example chips (additive) ===== */
 .welcome-examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 18px 0 4px; }
 .example-chip {
@@ -1412,3 +1416,166 @@ html, body {
 }
 .example-chip:hover { background: rgba(255,255,255,0.04); border-color: var(--accent, #5e6ad2); color: #ececf1; }
 .accent-text { color: var(--accent, #5e6ad2); font-weight: 600; }
+
+/* ==================== GOOGLE SIGN-IN GATE ==================== */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-app);
+}
+
+/* An explicit display rule would beat the [hidden] attribute, so restore it */
+.login-screen[hidden] {
+  display: none;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  padding: 40px 32px;
+  box-shadow: var(--shadow-dropdown);
+}
+
+.login-brand-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+  background: var(--primary-light);
+  border: 1px solid var(--primary-light-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.login-subtitle {
+  margin-top: 10px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.google-signin-btn {
+  margin-top: 24px;
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.google-signin-btn:hover {
+  background: #f8fafc;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.google-signin-btn:active {
+  background: #f1f5f9;
+}
+
+.login-error {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--status-error);
+}
+
+.login-footer {
+  margin-top: 20px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+/* ==================== SIGNED-IN USER CHIP ==================== */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 4px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-card);
+}
+
+.user-chip[hidden] {
+  display: none;
+}
+
+.user-avatar-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-avatar-img[hidden] {
+  display: none;
+}
+
+.user-avatar-fallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--avatar-user-bg);
+  color: var(--avatar-user-text);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.user-chip-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.logout-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.logout-btn:hover {
+  background: var(--status-error-bg);
+  color: var(--status-error);
+}

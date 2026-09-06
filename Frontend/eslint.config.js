@@ -7,9 +7,11 @@ export default [
       globals: {
         AbortController: 'readonly',
         DOMException: 'readonly',
+        Event: 'readonly',
         FormData: 'readonly',
         ReadableStream: 'readonly',
         TextDecoder: 'readonly',
+        URLSearchParams: 'readonly',
         console: 'readonly',
         confirm: 'readonly',
         clearTimeout: 'readonly',

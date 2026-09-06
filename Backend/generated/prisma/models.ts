@@ -8,6 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
+export type * from './models/User.ts'
 export type * from './models/Document.ts'
 export type * from './models/Conversation.ts'
 export type * from './models/ChatMessage.ts'

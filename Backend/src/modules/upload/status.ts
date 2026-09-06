@@ -4,10 +4,12 @@ import { minio } from "../../config/minio";
 import { env } from "../../config/env";
 import logger from "../../logger";
 import { getDeadLetters, retryDeadLetter } from "./dead-letter";
+import { requireUser } from "../auth/routes";
 
 export async function statusRoutes(app: FastifyInstance) {
-  app.get("/documents", async () => {
+  app.get("/documents", { preHandler: requireUser }, async (request) => {
     const docs = await prisma.document.findMany({
+      where: { ownerId: request.user!.id },
       select: {
         id: true,
         filename: true,
@@ -19,11 +21,13 @@ export async function statusRoutes(app: FastifyInstance) {
     return docs;
   });
 
-  app.get("/document/:id", async (request, reply) => {
+  // Ownership-scoped lookups 404 on other users' documents — same response as
+  // a missing id, so document identifiers can't be probed across accounts.
+  app.get("/document/:id", { preHandler: requireUser }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const doc = await prisma.document.findUnique({
-      where: { id },
+    const doc = await prisma.document.findFirst({
+      where: { id, ownerId: request.user!.id },
       select: { id: true, filename: true, status: true },
     });
 
@@ -34,10 +38,12 @@ export async function statusRoutes(app: FastifyInstance) {
     return reply.send(doc);
   });
 
-  app.delete("/document/:id", async (request, reply) => {
+  app.delete("/document/:id", { preHandler: requireUser }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const existing = await prisma.document.findUnique({ where: { id } });
+    const existing = await prisma.document.findFirst({
+      where: { id, ownerId: request.user!.id },
+    });
     if (!existing) {
       return reply.status(404).send({ message: "Document not found" });
     }
@@ -56,12 +62,12 @@ export async function statusRoutes(app: FastifyInstance) {
   });
 
 
-  app.get("/admin/dead-letters", async () => {
+  app.get("/admin/dead-letters", { preHandler: requireUser }, async () => {
     const entries = await getDeadLetters();
     return { count: entries.length, entries };
   });
 
-  app.post<{ Params: { id: string } }>('/admin/retry/:id', async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/admin/retry/:id', { preHandler: requireUser }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await retryDeadLetter(id);
 

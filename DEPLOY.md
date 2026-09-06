@@ -108,6 +108,16 @@ days, which breaks uploads with `ERR max requests limit exceeded`.
 | `GROQ_API` | (your Groq key — same as local .env) |
 | `GEMINI_API` | (your Gemini key) |
 | `OPENROUTER_API` | No longer required; Gemini is the configured fallback |
+| `GOOGLE_CLIENT_ID` | (Google OAuth client id — see below) |
+| `GOOGLE_CLIENT_SECRET` | (Google OAuth client secret) |
+| `SESSION_SECRET` | (unique random value, 32+ chars — sign-in breaks without it) |
+
+**Google sign-in setup (required — the app refuses to start in production without it):**
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → **APIs & Services → OAuth consent screen** → create the app (External)
+2. **Credentials → Create Credentials → OAuth client ID → Web application**
+3. Under **Authorized redirect URIs** add: `https://<your-render-url>.onrender.com/auth/google/callback`
+4. Copy the client ID/secret into the env vars above
 
 > Every secret in `render.yaml` is `sync: false` — the repo only declares the
 > key NAMES; the VALUES live in Render's dashboard. Never commit secrets.

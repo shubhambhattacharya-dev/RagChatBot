@@ -47,13 +47,15 @@ const state = {
   theme: 'light',
 };
 
-// Initial default conversation matching the user reference image
+// Initial default conversation matching the user reference image.
+// local: true — these are UI placeholders, not server objects: no delete button.
 const DEFAULT_CONVERSATIONS = [
   {
     id: 'default-conv-1',
     title: 'New Conversation',
     time: 'Just now',
-    messages: []
+    messages: [],
+    local: true
   }
 ];
 
@@ -126,6 +128,14 @@ function initDOM() {
   el.topKBtn = $('#topKBtn');
   el.topKMenu = $('#topKMenu');
   el.currentTopKText = $('#currentTopKText');
+  el.loginScreen = $('#loginScreen');
+  el.googleSignInBtn = $('#googleSignInBtn');
+  el.loginError = $('#loginError');
+  el.userChip = $('#userChip');
+  el.userAvatar = $('#userAvatar');
+  el.userAvatarFallback = $('#userAvatarFallback');
+  el.userName = $('#userName');
+  el.logoutBtn = $('#logoutBtn');
 }
 initDOM();
 loadPersistedState();
@@ -281,6 +291,85 @@ function toast(msg, type = 'success', duration = 3000) {
     t.classList.add('out');
     setTimeout(() => t.remove(), 250);
   }, duration);
+}
+
+// ==================== AUTH (Google sign-in) ====================
+function showLoginScreen(errorMessage) {
+  if (el.loginScreen) {
+    el.loginScreen.hidden = false;
+    if (el.loginError) {
+      el.loginError.hidden = !errorMessage;
+      el.loginError.textContent = errorMessage || '';
+    }
+  }
+  document.body.classList.add('auth-gated');
+}
+
+function hideLoginScreen() {
+  if (el.loginScreen) el.loginScreen.hidden = true;
+  document.body.classList.remove('auth-gated');
+}
+
+function renderUserChip(user) {
+  if (!el.userChip) return;
+  el.userChip.hidden = false;
+  const displayName = user.name || user.email || 'You';
+  if (el.userName) el.userName.textContent = displayName;
+  if (el.userAvatar && user.picture) {
+    el.userAvatar.onerror = () => {
+      el.userAvatar.hidden = true;
+      if (el.userAvatarFallback) {
+        el.userAvatarFallback.hidden = false;
+        el.userAvatarFallback.textContent = displayName.trim().charAt(0).toUpperCase() || 'U';
+      }
+    };
+    el.userAvatar.src = user.picture;
+    el.userAvatar.hidden = false;
+    if (el.userAvatarFallback) el.userAvatarFallback.hidden = true;
+  } else if (el.userAvatarFallback) {
+    el.userAvatarFallback.textContent = displayName.trim().charAt(0).toUpperCase() || 'U';
+  }
+}
+
+async function bootstrapAuth() {
+  try {
+    const r = await fetchWithTimeout(apiUrl('/auth/me'), { credentials: 'same-origin' }, 8000);
+    if (!r.ok) throw new Error('not signed in');
+    const user = await r.json();
+    hideLoginScreen();
+    renderUserChip(user);
+    return true;
+  } catch {
+    const authError = new URLSearchParams(location.search).get('auth');
+    const messages = {
+      cancelled: 'Sign-in was cancelled. Please try again.',
+      invalid_state: 'Sign-in session expired. Please try again.',
+      missing_code: 'Sign-in response was incomplete. Please try again.',
+      failed: 'Google sign-in failed. Please try again.',
+    };
+    showLoginScreen(messages[authError] || null);
+    return false;
+  }
+}
+
+function handleAuthExpired() {
+  if (state.streaming) return;
+  showLoginScreen('Your session has ended. Please sign in again.');
+}
+
+if (el.googleSignInBtn) {
+  el.googleSignInBtn.addEventListener('click', () => {
+    window.location.href = apiUrl('/auth/google');
+  });
+}
+
+if (el.logoutBtn) {
+  el.logoutBtn.addEventListener('click', async () => {
+    try {
+      await fetchWithTimeout(apiUrl('/auth/logout'), { method: 'POST', credentials: 'same-origin' }, 8000);
+    } catch { /* clearing client-side anyway */ }
+    window.location.href = apiUrl('/');
+  });
 }
 
 // ==================== HEALTH ====================
@@ -442,6 +531,7 @@ async function uploadFile(file) {
   fd.append('file', file);
   const res = await fetchWithTimeout(apiUrl('/upload'), { method: 'POST', body: fd }, 120_000);
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401) { handleAuthExpired(); throw new Error('Sign in required'); }
   if (!res.ok) throw new Error(body.error || body.message || 'Upload failed');
   return body;
 }
@@ -505,6 +595,7 @@ async function pollStatus(docId, file) {
 async function loadDocs() {
   try {
     const r = await fetchWithTimeout(apiUrl('/documents'), {}, 10_000);
+    if (r.status === 401) return handleAuthExpired();
     if (!r.ok) throw new Error('Failed to load documents');
     const docs = await r.json();
     state.docs = Array.isArray(docs) ? docs : [];
@@ -652,11 +743,9 @@ function renderHistory() {
           <span class="conversation-time">${conv.time || 'Just now'}</span>
         </div>
       </div>
-      <button class="conv-more-btn" title="Options" aria-label="Conversation options">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="1"/>
-          <circle cx="12" cy="5" r="1"/>
-          <circle cx="12" cy="19" r="1"/>
+      <button class="conv-delete-btn" title="Delete conversation" aria-label="Delete conversation" ${conv.local ? 'hidden' : ''}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M3 4.5H13M5.5 4.5V3C5.5 2.5 5.8 2 6.5 2H9.5C10.2 2 10.5 2.5 10.5 3V4.5M12 4.5V13C12 13.5 11.5 14 11 14H5C4.5 14 4 13.5 4 13V4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
       </button>
     `;
@@ -671,8 +760,44 @@ function renderHistory() {
       }
     });
 
+    const deleteBtn = item.querySelector('.conv-delete-btn');
+    if (deleteBtn && !conv.local) {
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteConversation(conv);
+      });
+    }
+
     el.historyList.appendChild(item);
   });
+}
+
+async function deleteConversation(conv) {
+  if (conv.local) return; // UI placeholder — nothing stored on the server
+  if (!confirm(`Delete "${conv.title}"? This cannot be undone.`)) return;
+
+  const wasActive = conv.id === state.activeConversationId;
+
+  try {
+    const r = await fetchWithTimeout(apiUrl(`/conversations/${encodeURIComponent(conv.id)}`), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }, 10_000);
+    if (r.status === 401) return handleAuthExpired();
+    if (!r.ok) throw new Error('Delete failed');
+  } catch (err) {
+    if (err && err.message === 'Sign in required') return;
+    toast('Could not delete conversation. Please try again.', 'error');
+    return;
+  }
+
+  state.history = state.history.filter((c) => c.id !== conv.id);
+  if (wasActive) {
+    state.activeConversationId = 'default-conv-1';
+    clearChatArea();
+  }
+  renderHistory();
+  toast('Conversation deleted', 'success', 2000);
 }
 
 function clearChatArea() {
@@ -691,7 +816,8 @@ function startNewConversation() {
     id: state.activeConversationId,
     title: 'New Conversation',
     time: 'Just now',
-    messages: []
+    messages: [],
+    local: true
   });
   renderHistory();
   clearChatArea();
@@ -843,6 +969,7 @@ async function executeChatMessage(question) {
 
   let fullText = '';
   let sources = [];
+  let streamErrorMessage = null;
 
   try {
     const res = await fetch(apiUrl(`/chat?question=${encodeURIComponent(question)}${docParam}`), {
@@ -852,6 +979,10 @@ async function executeChatMessage(question) {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        handleAuthExpired();
+        throw new DOMException('Sign in required', 'AbortError');
+      }
       throw new Error(body.error || body.message || `Server returned ${res.status}`);
     }
     if (!res.body) throw new Error('The server returned an empty response stream');
@@ -876,7 +1007,10 @@ async function executeChatMessage(question) {
 
         try {
           const p = JSON.parse(data);
-          if (p.type === 'error') throw new Error(p.message || 'The server reported a streaming error');
+          if (p.type === 'error') {
+            streamErrorMessage = p.message || 'The server reported a streaming error';
+            throw new Error(streamErrorMessage);
+          }
           if (p.type === 'status' && p.message && statusMsg) statusMsg.textContent = p.message;
           if (p.type === 'token' && p.content) {
             if (statusBox) statusBox.style.display = 'none';
@@ -896,6 +1030,23 @@ async function executeChatMessage(question) {
       }
     }
   } catch (err) {
+    if (err && err.name === 'AbortError' && err.message === 'Sign in required') {
+      // Session expired: login screen is up, no simulated answer needed.
+      return;
+    }
+
+    // The server explicitly reported a failure — surface it as an error
+    // message instead of masking it behind a simulated answer.
+    if (streamErrorMessage) {
+      if (statusBox) statusBox.style.display = 'none';
+      const errorBox = document.createElement('div');
+      errorBox.className = 'message-error';
+      errorBox.textContent = streamErrorMessage;
+      assistantRow.querySelector('.message-body-col').appendChild(errorBox);
+      scrollBottom();
+      return;
+    }
+
     console.info('Backend live streaming unavailable, rendering grounded interactive response', err);
     
     // Simulate streaming for smooth visual verification even when backend is in dev setup
@@ -1001,9 +1152,13 @@ function renderMD(text) {
 }
 
 // ==================== BOOTSTRAP ====================
-loadDocs();
-loadRemoteHistory();
-setViewMode('welcome');
+(async () => {
+  const signedIn = await bootstrapAuth();
+  if (!signedIn) return;
+  loadDocs();
+  loadRemoteHistory();
+  setViewMode('welcome');
+})();
 
 console.log('✨ RAG Chat initialized with perfect single-input flow and pure Gray/Black Dark Mode');
 
