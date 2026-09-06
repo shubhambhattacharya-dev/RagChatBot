@@ -12,7 +12,7 @@
     "dev": "bunx prisma generate && bun --watch src/app.ts",
     "start": "bunx prisma generate && bun src/app.ts",
     "typecheck": "tsc --noEmit",
-    "db:setup": "bun scripts/init-db.ts && bunx prisma db push && bun scripts/ensure-vector-index.ts",
+    "db:setup": "bun scripts/init-db.ts && bunx prisma db push --accept-data-loss && bun scripts/ensure-vector-index.ts",
     "reindex": "bun scripts/reindex.ts",
     "test": "bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat tests/auth tests/utils tests/health",
     "test:integration": "RUN_INTEGRATION_TESTS=1 bun test tests/database",

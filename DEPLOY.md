@@ -163,6 +163,9 @@ Open `https://<name>.onrender.com` in a browser:
 | Symptom | Likely cause | Fix |
 |:--------|:-------------|:----|
 | Service shows **Crashed** | Missing env var | Open Logs → look for `Invalid env:` → add the missing key |
+| Deploy fails at `prisma db push` with "data loss" warning | A schema change drops a column that still holds rows (e.g. the old `sessionId` on Conversation) | Already handled: `db:setup` runs `db push --accept-data-loss`. Schema drops are intentional and reviewed in code — check the pending migration SQL in `prisma/migrations/` before redeploying |
+| Boot fails with "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production" | Google sign-in env vars missing on the Render service | Add both in Render → Environment, plus the redirect URI `https://<your-app>.onrender.com/auth/google/callback` in Google Cloud Console |
+| Sign-in redirects but lands on `/?auth=failed` | Callback URI not registered in Google Cloud Console | Add `https://<your-app>.onrender.com/auth/google/callback` to the OAuth client's Authorized redirect URIs |
 | `P1001: Can't reach database` | Supabase URI wrong / not saved | Check `DATABASE_URL` uses the full `postgresql://...` URI |
 | **Backend offline** (red dot) | `REDIS_URL` override points at an external Redis | Remove the `REDIS_URL` override in Render → Environment; it must be `redis://localhost:6379` (in-container) |
 | Health returns `503` / `redis: error` | `ERR max requests limit exceeded` from a metered Redis (Upstash) | Remove the Upstash override and redeploy — the container's Redis is unlimited and free |
