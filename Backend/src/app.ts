@@ -6,7 +6,7 @@ import staticFiles from '@fastify/static'
 import { fileURLToPath } from "node:url";
 import {env, assertRuntimeConfig} from './config/env'
 import logger from './logger'
-import { ensureBucket } from "./config/minio";
+import { ensureBucket, probeStorage } from "./config/minio";
 import { uploadRoutes } from "./modules/upload/router";
 import { statusRoutes } from "./modules/upload/status";
 import { chatRoutes } from "./modules/chat/routes";
@@ -133,14 +133,17 @@ export async function buildApp(){
     await app.register(chatRoutes)
 
     // ── Health check ──────────────────────────────────────────────────
-    // Verifies DB + Redis are reachable (not just "server is up").
-    // Each probe races a timeout — a dead dependency reports fast instead
-    // of hanging the endpoint (frontend aborts at 4s and Render probes too).
+    // Verifies Postgres, Redis and object storage are reachable (not just "server is up").
+    // Probes run in parallel and each races a timeout — a dead dependency reports
+    // fast instead of hanging the endpoint (frontend aborts at 4s, Render probes too).
     app.get("/health", async (_request, reply) => {
-      const checks: Record<string, string> = Object.fromEntries([
-        await dependencyCheck("postgres", () => prisma.$queryRaw`SELECT 1`),
-        await dependencyCheck("redis", () => redisCircuitBreaker.execute(() => redis.ping())),
+      const results = await Promise.all([
+        dependencyCheck("postgres", () => prisma.$queryRaw`SELECT 1`),
+        dependencyCheck("redis", () => redisCircuitBreaker.execute(() => redis.ping())),
+        dependencyCheck("storage", () => probeStorage()),
       ]);
+
+      const checks: Record<string, string> = Object.fromEntries(results);
 
       const healthy = Object.values(checks).every((v) => v === "ok");
       const status = healthy ? 200 : 503;
@@ -153,8 +156,38 @@ export async function buildApp(){
       });
     });
 
-    //ensure minio bucket exist
-    await ensureBucket();
+    // Ensure the object-storage bucket exists. Boot must NOT crash here:
+    // a DNS blip, a paused Supabase project, or a wrong MINIO_ENDPOINT used
+    // to kill the process at startup and put Render into a crash-loop
+    // (FailedToOpenSocket → exit 1 → restart → repeat). Instead: retry,
+    // then degrade — uploads fail but the server boots, chat over
+    // already-indexed documents still works, and /health reports `storage:
+    // error` so the problem is visible.
+    const STORAGE_BOOT_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= STORAGE_BOOT_ATTEMPTS; attempt++) {
+      try {
+        await ensureBucket();
+        break;
+      } catch (err: any) {
+        const detail = err?.message || String(err);
+        if (attempt === STORAGE_BOOT_ATTEMPTS) {
+          logger.error(
+            { err: detail, endpoint: env.MINIO_ENDPOINT },
+            `Object storage unreachable after ${STORAGE_BOOT_ATTEMPTS} attempts — starting without it. ` +
+              `Uploads will fail until this is fixed. Check that MINIO_ENDPOINT's project ref resolves ` +
+              `in DNS (https://<ref>.supabase.co/storage/v1/s3) and the S3 keys belong to that project. ` +
+              `Last error: ${detail}`
+          );
+          void notifyAlert("RAG ChatBot: object storage unreachable at boot", {
+            endpoint: env.MINIO_ENDPOINT,
+            error: detail,
+          });
+        } else {
+          logger.warn({ attempt, err: detail }, "Object storage unreachable at boot — retrying");
+          await new Promise((resolve) => setTimeout(resolve, 2_000));
+        }
+      }
+    }
 
 return app;
 

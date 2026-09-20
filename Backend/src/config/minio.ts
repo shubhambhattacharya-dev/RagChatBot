@@ -75,6 +75,12 @@ export async function ensureBucket() {
   }
 }
 
+// /health probe — unlike bucketExists() it throws, so the real S3 error
+// (DNS failure, bad keys, missing bucket) surfaces in the health payload.
+export async function probeStorage() {
+  await s3.send(new HeadBucketCommand({ Bucket: env.MINIO_BUCKET }));
+}
+
 // Convert S3 Body (Blob / web stream / Node Readable) to a Buffer.
 async function bodyToBuffer(body: unknown): Promise<Buffer> {
   if (body == null) return Buffer.alloc(0);
