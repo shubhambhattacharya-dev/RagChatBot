@@ -16,10 +16,15 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const DOC_SCOPE_STORAGE_KEY = 'rag-chatbot-active-document-v1';
 const THEME_STORAGE_KEY = 'rag-chatbot-theme-v1';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 let activeRequestController = null;
 
 function apiUrl(path) {
   return `${API}${path}`;
+}
+
+function isDocumentId(value) {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
 }
 
 async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT_MS) {
@@ -61,7 +66,11 @@ const DEFAULT_CONVERSATIONS = [
 
 function loadPersistedState() {
   try {
-    state.activeDocId = localStorage.getItem(DOC_SCOPE_STORAGE_KEY) || null;
+    const savedDocumentId = localStorage.getItem(DOC_SCOPE_STORAGE_KEY);
+    state.activeDocId = isDocumentId(savedDocumentId) ? savedDocumentId : null;
+    if (savedDocumentId && !state.activeDocId) {
+      localStorage.removeItem(DOC_SCOPE_STORAGE_KEY);
+    }
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
     if (savedTheme) {
       state.theme = savedTheme;
@@ -511,17 +520,9 @@ async function handleFiles(files) {
       updateFileProgressItem(file, 'processing');
       toast(`${file.name} uploaded`, 'success', 2000);
       pollStatus(res.documentId || res.id, file);
-    } catch {
-      updateFileProgressItem(file, 'ready');
-      // Gracefully record document in UI state for testing
-      state.docs.push({
-        id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        filename: file.name,
-        size: file.size,
-        status: 'READY'
-      });
-      renderDocs();
-      toast(`${file.name} indexed ready`, 'success', 2000);
+    } catch (error) {
+      updateFileProgressItem(file, 'failed');
+      toast(`${file.name} upload failed: ${error.message}`, 'error', 5_000);
     }
   }
 }
@@ -962,6 +963,11 @@ async function executeChatMessage(question) {
   const statusBox = assistantRow.querySelector('#activeStreamStatus');
   const statusMsg = assistantRow.querySelector('#activeStreamMsg');
 
+  if (state.activeDocId && !isDocumentId(state.activeDocId)) {
+    state.activeDocId = null;
+    persistState();
+    renderDocs();
+  }
   const docParam = state.activeDocId ? `&documentId=${encodeURIComponent(state.activeDocId)}` : '';
 
   activeRequestController = new AbortController();

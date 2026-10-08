@@ -36,3 +36,9 @@ test('conversations can be deleted individually', () => {
   assert.match(app, /deleteConversation/);
   assert.match(app, /\/conversations\/\$\{encodeURIComponent\(conv\.id\)\}/);
 });
+
+test('failed uploads cannot create invalid document scopes', () => {
+  assert.match(app, /UUID_PATTERN/);
+  assert.match(app, /upload failed: \$\{error\.message\}/);
+  assert.doesNotMatch(app, /id: `doc-\$\{Date\.now\(\)\}/);
+});
