@@ -61,8 +61,10 @@ async function readSessionUser(request: FastifyRequest): Promise<SessionUser | n
 }
 
 function callbackUri(request: FastifyRequest): string {
-  // trustProxy is enabled in production, so request.protocol reflects X-Forwarded-Proto.
-  return `${request.protocol}://${request.headers.host}/auth/google/callback`;
+  // Render terminates TLS at its proxy, but the app may see the proxy-to-app
+  // connection as HTTP. Google requires the public HTTPS callback URI.
+  const protocol = env.NODE_ENV === "production" ? "https" : request.protocol;
+  return `${protocol}://${request.headers.host}/auth/google/callback`;
 }
 
 function setOAuthState(reply: FastifyReply, state: string): void {
