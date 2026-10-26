@@ -103,12 +103,11 @@ export async function buildApp(){
       reply.header("X-Frame-Options", "DENY");
       reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
       // fonts.googleapis.com serves the Google Fonts stylesheet the frontend
-      // links, fonts.gstatic.com the font files it references, and
-      // *.googleusercontent.com the Google profile photos shown in the user chip.
+      // links, fonts.gstatic.com the font files it references.
       reply.header("Content-Security-Policy", [
         "default-src 'self'",
         "connect-src 'self'",
-        "img-src 'self' data: https://*.googleusercontent.com",
+        "img-src 'self' data:",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "script-src 'self'",

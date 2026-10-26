@@ -1,119 +1,125 @@
 import { describe, expect, test } from "vitest";
+import fastify from "fastify";
+import cookie from "@fastify/cookie";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
 import {
-  buildGoogleAuthUrl,
-  isStateValid,
-  mapGoogleProfile,
-  GOOGLE_SCOPES,
-} from "../../src/modules/auth/google";
+  authRoutes,
+  requireUser,
+  USER_COOKIE,
+  USER_COOKIE_OPTIONS,
+} from "../../src/modules/auth/routes";
 
-// ─── buildGoogleAuthUrl ─────────────────────────────────────────────────────
+const TEST_SECRET = "super-secret-test-session-key-at-least-32-chars";
 
-describe("buildGoogleAuthUrl", () => {
-  const base = { clientId: "my-client-id", redirectUri: "https://app.example.com/auth/google/callback", state: "state-123" };
+async function buildTestApp() {
+  const app = fastify();
+  await app.register(cookie, { secret: TEST_SECRET });
+  await app.register(authRoutes);
 
-  test("points at Google's authorization endpoint", () => {
-    expect(buildGoogleAuthUrl(base).startsWith("https://accounts.google.com/o/oauth2/v2/auth?")).toBe(true);
+  // A protected sandbox route to verify requireUser behavior
+  app.get("/test/protected", { preHandler: requireUser }, async (request) => {
+    return { user: request.user };
   });
 
-  test("carries client id, redirect uri, and response type", () => {
-    const url = new URL(buildGoogleAuthUrl(base));
-    expect(url.searchParams.get("client_id")).toBe("my-client-id");
-    expect(url.searchParams.get("redirect_uri")).toBe("https://app.example.com/auth/google/callback");
-    expect(url.searchParams.get("response_type")).toBe("code");
-  });
+  await app.ready();
+  return app;
+}
 
-  test("requests openid, email, and profile scopes", () => {
-    const url = new URL(buildGoogleAuthUrl(base));
-    expect(url.searchParams.get("scope")).toBe(GOOGLE_SCOPES.join(" "));
-    expect(GOOGLE_SCOPES).toContain("openid");
-  });
-
-  test("includes the CSRF state parameter verbatim", () => {
-    const url = new URL(buildGoogleAuthUrl(base));
-    expect(url.searchParams.get("state")).toBe("state-123");
-  });
-
-  test("forces the account chooser so users can switch Google identities", () => {
-    const url = new URL(buildGoogleAuthUrl(base));
-    expect(url.searchParams.get("prompt")).toBe("select_account");
-  });
-});
-
-// ─── isStateValid (CSRF guard) ──────────────────────────────────────────────
-
-describe("isStateValid", () => {
-  test("accepts matching cookie and query states", () => {
-    expect(isStateValid("abc-123", "abc-123")).toBe(true);
-  });
-
-  test("rejects mismatched states", () => {
-    expect(isStateValid("abc-123", "different")).toBe(false);
-  });
-
-  test("rejects missing cookie state (flow was never started)", () => {
-    expect(isStateValid(undefined, "abc-123")).toBe(false);
-  });
-
-  test("rejects missing query state (Google did not return it)", () => {
-    expect(isStateValid("abc-123", undefined)).toBe(false);
-  });
-
-  test("rejects empty strings", () => {
-    expect(isStateValid("", "")).toBe(false);
-  });
-});
-
-// ─── mapGoogleProfile ───────────────────────────────────────────────────────
-
-describe("mapGoogleProfile", () => {
-  const validPayload = {
-    sub: "google-user-id-42",
-    email: "User@Example.com",
-    email_verified: true,
-    name: "  Shubham Bhattacharya  ",
-    picture: "https://lh3.googleusercontent.com/a/photo.jpg",
-  };
-
-  test("maps a complete payload", () => {
-    const profile = mapGoogleProfile(validPayload);
-    expect(profile).toEqual({
-      googleId: "google-user-id-42",
-      email: "user@example.com",
-      name: "Shubham Bhattacharya",
-      picture: "https://lh3.googleusercontent.com/a/photo.jpg",
+describe("Open Sandbox / Guest Session Authentication", () => {
+  test("new visitor calling /auth/me automatically gets a guest session and cookie", async () => {
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/auth/me",
     });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.id).toBeDefined();
+    expect(body.name).toBe("Guest Sandbox");
+    expect(body.isGuest).toBe(true);
+
+    const cookies = res.cookies;
+    const sessionCookie = cookies.find((c) => c.name === USER_COOKIE);
+    expect(sessionCookie).toBeDefined();
+    expect(sessionCookie?.value).toBeDefined();
+    await app.close();
   });
 
-  test("lowercases and trims the email for stable uniqueness", () => {
-    expect(mapGoogleProfile(validPayload).email).toBe("user@example.com");
+  test("protected routes never reject visitors with 401 and seamlessly attach guest user", async () => {
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/test/protected",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.user).toBeDefined();
+    expect(body.user.id).toBeDefined();
+    expect(body.user.isGuest).toBe(true);
+    await app.close();
   });
 
-  test("trims the display name", () => {
-    expect(mapGoogleProfile(validPayload).name).toBe("Shubham Bhattacharya");
+  test("returning visitor with signed session cookie preserves their identity", async () => {
+    const app = await buildTestApp();
+    // First request
+    const firstRes = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+    });
+    const firstUser = JSON.parse(firstRes.body);
+    const sessionCookie = firstRes.cookies.find((c) => c.name === USER_COOKIE);
+    expect(sessionCookie).toBeDefined();
+
+    // Subsequent request with the same signed cookie
+    const secondRes = await app.inject({
+      method: "GET",
+      url: "/test/protected",
+      cookies: {
+        [USER_COOKIE]: sessionCookie!.value,
+      },
+    });
+
+    expect(secondRes.statusCode).toBe(200);
+    const secondUser = JSON.parse(secondRes.body).user;
+    expect(secondUser.id).toBe(firstUser.id);
+    await app.close();
   });
 
-  test("rejects payloads without the `sub` identifier", () => {
-    const { sub, ...noSub } = validPayload;
-    expect(() => mapGoogleProfile(noSub)).toThrow("sub");
+  test("POST /auth/logout and /auth/reset clear the session cookie", async () => {
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/logout",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const cleared = res.cookies.find((c) => c.name === USER_COOKIE);
+    expect(cleared?.value).toBe("");
+    await app.close();
   });
 
-  test("rejects payloads without an email", () => {
-    const { email, ...noEmail } = validPayload;
-    expect(() => mapGoogleProfile(noEmail)).toThrow("email");
+  test("Google OAuth routes (/auth/google and /auth/google/callback) are completely removed (404)", async () => {
+    const app = await buildTestApp();
+    const resGoogle = await app.inject({
+      method: "GET",
+      url: "/auth/google",
+    });
+    expect(resGoogle.statusCode).toBe(404);
+
+    const resCallback = await app.inject({
+      method: "GET",
+      url: "/auth/google/callback",
+    });
+    expect(resCallback.statusCode).toBe(404);
+    await app.close();
   });
 
-  test("treats blank name as null instead of empty string", () => {
-    const profile = mapGoogleProfile({ ...validPayload, name: "   " });
-    expect(profile.name).toBeNull();
-  });
-
-  test("treats missing name as null", () => {
-    const { name, ...noName } = validPayload;
-    expect(mapGoogleProfile(noName).name).toBeNull();
-  });
-
-  test("rejects non-https picture URLs", () => {
-    const profile = mapGoogleProfile({ ...validPayload, picture: "javascript:alert(1)" });
-    expect(profile.picture).toBeNull();
+  test("google.ts file has been completely removed from source tree", () => {
+    const googlePath = resolve(__dirname, "../../src/modules/auth/google.ts");
+    expect(existsSync(googlePath)).toBe(false);
   });
 });

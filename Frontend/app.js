@@ -137,12 +137,7 @@ function initDOM() {
   el.topKBtn = $('#topKBtn');
   el.topKMenu = $('#topKMenu');
   el.currentTopKText = $('#currentTopKText');
-  el.loginScreen = $('#loginScreen');
-  el.googleSignInBtn = $('#googleSignInBtn');
-  el.loginError = $('#loginError');
   el.userChip = $('#userChip');
-  el.userAvatar = $('#userAvatar');
-  el.userAvatarFallback = $('#userAvatarFallback');
   el.userName = $('#userName');
   el.logoutBtn = $('#logoutBtn');
 }
@@ -302,82 +297,43 @@ function toast(msg, type = 'success', duration = 3000) {
   }, duration);
 }
 
-// ==================== AUTH (Google sign-in) ====================
-function showLoginScreen(errorMessage) {
-  if (el.loginScreen) {
-    el.loginScreen.hidden = false;
-    if (el.loginError) {
-      el.loginError.hidden = !errorMessage;
-      el.loginError.textContent = errorMessage || '';
-    }
-  }
-  document.body.classList.add('auth-gated');
-}
-
-function hideLoginScreen() {
-  if (el.loginScreen) el.loginScreen.hidden = true;
-  document.body.classList.remove('auth-gated');
-}
-
+// ==================== OPEN SANDBOX / GUEST SESSION ====================
 function renderUserChip(user) {
   if (!el.userChip) return;
   el.userChip.hidden = false;
-  const displayName = user.name || user.email || 'You';
+  const displayName = user?.name || 'Guest Sandbox';
   if (el.userName) el.userName.textContent = displayName;
-  if (el.userAvatar && user.picture) {
-    el.userAvatar.onerror = () => {
-      el.userAvatar.hidden = true;
-      if (el.userAvatarFallback) {
-        el.userAvatarFallback.hidden = false;
-        el.userAvatarFallback.textContent = displayName.trim().charAt(0).toUpperCase() || 'U';
-      }
-    };
-    el.userAvatar.src = user.picture;
-    el.userAvatar.hidden = false;
-    if (el.userAvatarFallback) el.userAvatarFallback.hidden = true;
-  } else if (el.userAvatarFallback) {
-    el.userAvatarFallback.textContent = displayName.trim().charAt(0).toUpperCase() || 'U';
-  }
 }
 
 async function bootstrapAuth() {
   try {
     const r = await fetchWithTimeout(apiUrl('/auth/me'), { credentials: 'same-origin' }, 8000);
-    if (!r.ok) throw new Error('not signed in');
-    const user = await r.json();
-    hideLoginScreen();
-    renderUserChip(user);
-    return true;
+    if (r.ok) {
+      const user = await r.json();
+      renderUserChip(user);
+      return true;
+    }
   } catch {
-    const authError = new URLSearchParams(location.search).get('auth');
-    const messages = {
-      cancelled: 'Sign-in was cancelled. Please try again.',
-      invalid_state: 'Sign-in session expired. Please try again.',
-      missing_code: 'Sign-in response was incomplete. Please try again.',
-      failed: 'Google sign-in failed. Please try again.',
-    };
-    showLoginScreen(messages[authError] || null);
-    return false;
+    // Offline or network hiccup — visitor still has open sandbox access
   }
+  renderUserChip({ name: 'Guest Sandbox' });
+  return true;
 }
 
 function handleAuthExpired() {
-  if (state.streaming) return;
-  showLoginScreen('Your session has ended. Please sign in again.');
-}
-
-if (el.googleSignInBtn) {
-  el.googleSignInBtn.addEventListener('click', () => {
-    window.location.href = apiUrl('/auth/google');
-  });
+  // In open sandbox mode, refresh session seamlessly without blocking the visitor
+  bootstrapAuth();
 }
 
 if (el.logoutBtn) {
   el.logoutBtn.addEventListener('click', async () => {
     try {
-      await fetchWithTimeout(apiUrl('/auth/logout'), { method: 'POST', credentials: 'same-origin' }, 8000);
+      await fetchWithTimeout(apiUrl('/auth/reset'), { method: 'POST', credentials: 'same-origin' }, 8000);
     } catch { /* clearing client-side anyway */ }
-    window.location.href = apiUrl('/');
+    toast('Sandbox session reset — starting fresh', 'info', 1500);
+    setTimeout(() => {
+      window.location.href = apiUrl('/');
+    }, 350);
   });
 }
 
@@ -1159,8 +1115,7 @@ function renderMD(text) {
 
 // ==================== BOOTSTRAP ====================
 (async () => {
-  const signedIn = await bootstrapAuth();
-  if (!signedIn) return;
+  await bootstrapAuth();
   loadDocs();
   loadRemoteHistory();
   setViewMode('welcome');

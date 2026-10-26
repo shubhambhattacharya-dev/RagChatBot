@@ -22,13 +22,16 @@ test('upload and chat controls have accessible affordances', () => {
   assert.match(html, /aria-label="Stop response"/);
 });
 
-test('sign-in gate and user session controls are present', () => {
-  assert.match(html, /id="googleSignInBtn"/);
-  assert.match(html, /id="loginScreen"/);
+test('open sandbox visitor lands directly on chat without Google sign-in gate', () => {
+  // Direct chat access with sandbox session controls
+  assert.doesNotMatch(html, /id="googleSignInBtn"/);
+  assert.doesNotMatch(html, /id="loginScreen"/);
+  assert.match(html, /sandbox-chip/);
+  assert.match(html, /id="userChip"/);
+  assert.match(html, /id="logoutBtn"/);
   assert.match(app, /bootstrapAuth/);
   assert.match(app, /\/auth\/me/);
-  assert.match(app, /\/auth\/logout/);
-  assert.match(html, /id="logoutBtn"/);
+  assert.match(app, /\/auth\/reset/);
 });
 
 test('conversations can be deleted individually', () => {

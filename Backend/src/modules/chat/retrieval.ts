@@ -114,7 +114,7 @@ export function buildLexicalTsQuery(question: string): string | null {
  * and the Prisma-created column is the camelCase "ownerId".
  */
 export function buildDocFilter(ownerId: string, documentId?: string): Prisma.Sql {
-  const ownerScope = Prisma.sql`d."ownerId" = ${ownerId} AND d.status = 'READY'`;
+  const ownerScope = Prisma.sql`(d."ownerId" = ${ownerId} OR d."ownerId" IS NULL) AND d.status = 'READY'`;
   return documentId
     ? Prisma.sql`c."documentId" = ${documentId} AND ${ownerScope}`
     : ownerScope;

@@ -9,7 +9,9 @@ import { requireUser } from "../auth/routes";
 export async function statusRoutes(app: FastifyInstance) {
   app.get("/documents", { preHandler: requireUser }, async (request) => {
     const docs = await prisma.document.findMany({
-      where: { ownerId: request.user!.id },
+      where: {
+        OR: [{ ownerId: request.user!.id }, { ownerId: null }],
+      },
       select: {
         id: true,
         filename: true,
@@ -27,7 +29,10 @@ export async function statusRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
 
     const doc = await prisma.document.findFirst({
-      where: { id, ownerId: request.user!.id },
+      where: {
+        id,
+        OR: [{ ownerId: request.user!.id }, { ownerId: null }],
+      },
       select: { id: true, filename: true, status: true },
     });
 

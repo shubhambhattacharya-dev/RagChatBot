@@ -15,10 +15,11 @@ datasource db {
 
 model User {
   id            String         @id @default(uuid())
-  googleId      String         @unique
-  email         String         @unique
+  googleId      String?        @unique
+  email         String?        @unique
   name          String?
   picture       String?
+  isGuest       Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   documents     Document[]
