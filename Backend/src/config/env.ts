@@ -26,8 +26,8 @@ export const EnvSchema=z.object({
     JAEGER_ENDPOINT: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
     METRICS_ENABLED: z.preprocess((value) => value === undefined || value === "" ? true : value === true || value === "true" || value === "1", z.boolean()).default(true),
     ALERT_WEBHOOK_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
-    CHAT_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(30),
-    UPLOAD_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(10),
+    CHAT_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(60),
+    UPLOAD_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().max(10_000).default(30),
 })
 
 const Parsed=EnvSchema.safeParse(process.env);

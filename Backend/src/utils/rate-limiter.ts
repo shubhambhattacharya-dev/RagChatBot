@@ -99,12 +99,13 @@ export class RedisSlidingWindowRateLimiter {
   }
 }
 
-export function rateLimit(opts: RateLimiterOptions & { redis?: Redis }) {
+export function rateLimit(opts: RateLimiterOptions & { redis?: Redis; scope?: string }) {
   const limiter = opts.redis ? new RedisSlidingWindowRateLimiter(opts.redis, opts) : new RateLimiter(opts);
+  const scopePrefix = opts.scope ? `${opts.scope}:` : "";
 
   return async function rateLimitHandler(request: any, reply: any) {
     const ip = request.ip || request.socket?.remoteAddress || "unknown";
-    const { allowed, remaining, retryAfterMs } = await limiter.check(ip);
+    const { allowed, remaining, retryAfterMs } = await limiter.check(`${scopePrefix}${ip}`);
 
     reply.header("RateLimit-Limit", opts.maxRequests);
     reply.header("RateLimit-Remaining", remaining);

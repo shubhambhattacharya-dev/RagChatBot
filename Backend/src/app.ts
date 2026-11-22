@@ -27,16 +27,19 @@ const HEALTH_CHECK_TIMEOUT_MS = 3_000;
   maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   redis,
+  scope: "general",
   });
   const chatRateLimit = rateLimit({
     maxRequests: env.CHAT_RATE_LIMIT_MAX_REQUESTS,
     windowMs: env.RATE_LIMIT_WINDOW_MS,
     redis,
+    scope: "chat",
   });
   const uploadRateLimit = rateLimit({
     maxRequests: env.UPLOAD_RATE_LIMIT_MAX_REQUESTS,
     windowMs: env.RATE_LIMIT_WINDOW_MS,
     redis,
+    scope: "upload",
   });
 
 async function dependencyCheck(
@@ -117,9 +120,14 @@ export async function buildApp(){
       if (env.NODE_ENV === "production") reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     });
     app.addHook("onRequest", async (request, reply) => {
-      if (request.url.startsWith("/health")) return;
-      if (request.url.startsWith("/chat")) return chatRateLimit(request, reply);
-      if (request.url.startsWith("/upload")) return uploadRateLimit(request, reply);
+      const path = request.url.split("?")[0] ?? request.url;
+      if (path.startsWith("/health")) return;
+      // Do not consume API rate-limit quota on static frontend assets
+      if (request.method === "GET" && (path === "/" || /\.(css|js|png|jpg|jpeg|svg|ico|woff2?|ttf)$/i.test(path))) {
+        return;
+      }
+      if (path.startsWith("/chat")) return chatRateLimit(request, reply);
+      if (path.startsWith("/upload")) return uploadRateLimit(request, reply);
       return requestRateLimit(request, reply);
     });
     // serve frontend from ../Frontend (same origin — no CORS)
