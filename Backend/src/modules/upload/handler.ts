@@ -95,14 +95,32 @@ export async function handleUpload(
       }
     );
 
-    // 5. Save metadata — owned by the signed-in user
+    // 5. Save metadata — owned by the signed-in user.
+    // Ensure the guest user row exists first; if a previous request fell back
+    // to an ephemeral cookie, creating the document without upserting the user
+    // would violate Document_ownerId_fkey (P2003 → 500).
+    const ownerId = request.user?.id ?? null;
+    if (ownerId) {
+      await prisma.user.upsert({
+        where: { id: ownerId },
+        update: {},
+        create: {
+          id: ownerId,
+          googleId: `guest_${ownerId}`,
+          name: request.user?.name || "Guest Sandbox",
+          email: `guest_${ownerId}@sandbox.local`,
+          isGuest: true,
+        },
+      }).catch(() => undefined);
+    }
+
     await prisma.document.create({
       data: {
         id: documentId,
         filename: storedFilename,
         mimeType: file.mimetype,
         fileKey,
-        ownerId: request.user!.id,
+        ownerId,
         status: "QUEUED",
       },
     });
@@ -122,8 +140,14 @@ export async function handleUpload(
       filename: storedFilename,
       status: "QUEUED",
     });
-  } catch (error) {
+  } catch (error: any) {
     request.log.error(error, "Upload failed");
+
+    if (error?.code === "FST_REQ_FILE_TOO_LARGE" || error?.statusCode === 413) {
+      return reply.status(413).send({
+        message: "File exceeds the 25 MB maximum upload size.",
+      });
+    }
 
     reply.status(500).send({
       message: "Failed to upload file.",

@@ -36,22 +36,44 @@ export async function readSessionUser(request: FastifyRequest): Promise<SessionU
   const unsigned = request.unsignCookie(request.cookies[USER_COOKIE] || "");
   if (!unsigned.valid || !unsigned.value) return null;
 
+  const isUuid = /^[0-9a-fA-F-]{36}$/.test(unsigned.value);
+
   try {
     const user = await prisma.user.findUnique({
       where: { id: unsigned.value },
       select: { id: true, email: true, name: true, picture: true, isGuest: true },
     });
     if (user) return user;
+
+    // Signed cookie is valid but the User row is missing in Postgres (e.g. DB was
+    // reset, or initial guest creation happened during a cold-start blip).
+    // Upsert the guest row now so FK constraints on Document.ownerId and
+    // Conversation.userId never fail with P2003 (HTTP 500) during /upload or /chat.
+    if (isUuid) {
+      const guestId = unsigned.value;
+      return await prisma.user.upsert({
+        where: { id: guestId },
+        update: {},
+        create: {
+          id: guestId,
+          googleId: `guest_${guestId}`,
+          name: "Guest Sandbox",
+          email: `guest_${guestId}@sandbox.local`,
+          isGuest: true,
+        },
+        select: { id: true, email: true, name: true, picture: true, isGuest: true },
+      });
+    }
   } catch (err) {
-    logger.warn({ err }, "Database lookup for session user failed; falling back to ephemeral guest session");
+    logger.warn({ err }, "Database lookup/upsert for session user failed; falling back to ephemeral guest session");
   }
 
   // If signed cookie value looks like a valid uuid, construct a fallback session user
-  if (/^[0-9a-fA-F-]{36}$/.test(unsigned.value)) {
+  if (isUuid) {
     return {
       id: unsigned.value,
       name: "Guest Sandbox",
-      email: `guest_${unsigned.value.slice(0, 8)}@sandbox.local`,
+      email: `guest_${unsigned.value}@sandbox.local`,
       picture: null,
       isGuest: true,
     };
@@ -75,7 +97,7 @@ export async function getOrCreateGuestUser(request: FastifyRequest, reply: Fasti
   let guestUser: SessionUser = {
     id: guestId,
     name: "Guest Sandbox",
-    email: `guest_${guestId.slice(0, 8)}@sandbox.local`,
+    email: `guest_${guestId}@sandbox.local`,
     picture: null,
     isGuest: true,
   };

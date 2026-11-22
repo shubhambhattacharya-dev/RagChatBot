@@ -7,17 +7,22 @@ export async function saveConversation(
   sources: string[],
   documentId?: string,
 ): Promise<void> {
-  await prisma.conversation.create({
-    data: {
-      userId,
-      messages: {
-        create: [
-          { role: "user", content: question, documentId },
-          { role: "assistant", content: answer, sources, documentId },
-        ],
+  try {
+    await prisma.conversation.create({
+      data: {
+        userId,
+        messages: {
+          create: [
+            { role: "user", content: question, documentId },
+            { role: "assistant", content: answer, sources, documentId },
+          ],
+        },
       },
-    },
-  });
+    });
+  } catch {
+    // Non-fatal: a failed history write (e.g. ephemeral guest session during DB blip)
+    // must never fail an already-streamed chat answer.
+  }
 }
 
 export async function listConversations(userId: string) {
