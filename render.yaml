@@ -43,5 +43,3 @@ services:
         sync: false                      # paste your Groq key
       - key: GEMINI_API
         sync: false                      # paste your Gemini key
-      - key: OPENROUTER_API
-        sync: false                      # paste your OpenRouter key (env requires it)

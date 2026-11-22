@@ -2,6 +2,7 @@
   "name": "ragchatbot",
   "private": true,
   "scripts": {
-    "dev": "cd Backend && npm run dev"
+    "dev": "cd Backend && bun run dev",
+    "test": "cd Backend && bun run test && cd ../Frontend && npm run check"
   }
 }

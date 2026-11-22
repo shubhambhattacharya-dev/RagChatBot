@@ -62,7 +62,7 @@ Use this document to walk interviewers through your project with confidence.
 | LRU cache size | 10K entries | ~30MB, eliminates redundant API calls |
 | Circuit breaker threshold | 5 failures | Prevents cascading failures |
 | Circuit cooldown | 30s | Quick recovery, doesn't hammer dead services |
-| Upload size limit | 20MB | Prevents abuse, fits most use cases |
+| Upload size limit | 25MB | Prevents abuse, fits most use cases |
 | Rate limits | 120/30/10 per min | General/chat/upload — tiered protection |
 | RRF weights | exact=3.0, lexical=1.5, vector=1.0 | Prioritizes precise matches |
 | RRF K constant | 60 | Smoothing factor for rank fusion |
@@ -424,8 +424,8 @@ Managed vector DBs are great, but:
 
 ### "How is multi-user support implemented?"
 
-- **Authentication:** Google OAuth 2.0 Authorization Code flow, hand-rolled on `fetch` (state parameter with timing-safe CSRF check, no auth SDK). Session = signed, httpOnly, SameSite=Lax cookie holding the user id; production refuses to boot without `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
-- **Tenant isolation:** `ownerId` on Document and `userId` on Conversation. `buildDocFilter(ownerId)` injects the owner predicate into **every** retrieval strategy (vector, lexical, owner search), and document list/get/delete are ownership-scoped with 404s (not 403s) to avoid existence leaks.
+- **Open Sandbox Sessions:** Each visitor automatically receives a cryptographically signed, `httpOnly`, `SameSite=Lax` cookie (`rag_user`) holding a guest UUID (persisted in Postgres `User` table with graceful cookie fallback). Zero login wall for reviewers, with `POST /auth/reset` to start fresh; production refuses to boot without a 32+ character `SESSION_SECRET`.
+- **Tenant isolation:** `ownerId` on Document and `userId` on Conversation. `buildDocFilter(ownerId)` injects the owner predicate (`d."ownerId" = ${ownerId} OR d."ownerId" IS NULL`) into **every** retrieval strategy (vector, lexical, owner search), and document list/get/delete are ownership-scoped with 404s (not 403s) to avoid existence leaks.
 - **Rate limits per user:** Currently per-IP; a natural next step is keying the limiter on `userId`
 - **Scale path:** Postgres row-level security, or a server-side Redis session store for instant revocation
 

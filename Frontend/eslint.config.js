@@ -12,6 +12,8 @@ export default [
         ReadableStream: 'readonly',
         TextDecoder: 'readonly',
         URLSearchParams: 'readonly',
+        XMLHttpRequest: 'readonly',
+        clearInterval: 'readonly',
         console: 'readonly',
         confirm: 'readonly',
         clearTimeout: 'readonly',

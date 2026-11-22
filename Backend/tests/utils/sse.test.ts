@@ -56,6 +56,7 @@ describe("setupSSE", () => {
 
     const headers = reply.raw.writeHead.mock.calls[0]![1]!;
     expect(headers["Access-Control-Allow-Origin"]).toBe("http://localhost:5500");
+    expect(headers["Access-Control-Allow-Credentials"]).toBe("true");
     expect(headers["Vary"]).toBe("Origin");
   });
 

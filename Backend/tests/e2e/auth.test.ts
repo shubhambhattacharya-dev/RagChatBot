@@ -15,93 +15,57 @@ async function get(path: string, init?: RequestInit) {
   return fetch(`${BASE}${path}`, { redirect: "manual", ...init });
 }
 
-describeLive("authentication gates (live API)", () => {
+describeLive("authentication gates (live API — open sandbox mode)", () => {
   test("health stays public for Render probes", async () => {
     const res = await get("/health");
     expect(res.status).toBe(200);
   });
 
-  test("frontend login page stays public", async () => {
+  test("frontend landing page stays public", async () => {
     const res = await get("/");
     expect(res.status).toBe(200);
   });
 
-  test("documents list requires a session", async () => {
-    const res = await get("/documents");
-    expect(res.status).toBe(401);
-    const body = (await res.json()) as { message?: string };
-    expect(body.message).toBeTruthy();
-  });
-
-  test("single document lookup requires a session (404-equivalent, no leak)", async () => {
-    const res = await get(`/document/${randomUUID()}`);
-    expect([401, 404]).toContain(res.status);
-  });
-
-  test("chat (GET SSE) requires a session", async () => {
-    const res = await get("/chat?question=hello");
-    expect(res.status).toBe(401);
-  });
-
-  test("chat (POST) requires a session", async () => {
-    const res = await get("/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: "hello" }),
-    });
-    expect(res.status).toBe(401);
-  });
-
-  test("conversation list, clear, and single delete require a session", async () => {
-    expect((await get("/conversations")).status).toBe(401);
-    expect((await get("/conversations", { method: "DELETE" })).status).toBe(401);
-    expect((await get(`/conversations/${randomUUID()}`, { method: "DELETE" })).status).toBe(401);
-  });
-
-  test("upload requires a session", async () => {
-    const form = new FormData();
-    form.append("file", new Blob(["%PDF-fake"]), "x.pdf");
-    const res = await get("/upload", { method: "POST", body: form });
-    expect(res.status).toBe(401);
-  });
-
-  test("admin dead-letter endpoints require a session", async () => {
-    expect((await get("/admin/dead-letters")).status).toBe(401);
-    expect((await get(`/admin/retry/${randomUUID()}`, { method: "POST" })).status).toBe(401);
-  });
-
-  test("/auth/me reports signed-out state as 401", async () => {
+  test("/auth/me automatically provisions a guest session and signed cookie", async () => {
     const res = await get("/auth/me");
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id?: string; isGuest?: boolean };
+    expect(body.id).toBeTruthy();
+    expect(body.isGuest).toBe(true);
+    expect(res.headers.get("set-cookie") ?? "").toContain("rag_user=");
   });
 
-  test("forged session cookie is rejected (signature check)", async () => {
-    const res = await get("/documents", {
-      headers: { Cookie: `rag_user=${randomUUID()}.forged-signature` },
+  test("documents list attaches a guest session instead of 401", async () => {
+    const res = await get("/documents");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+  });
+
+  test("single document lookup returns 404 for unknown uuid (no existence leak)", async () => {
+    const res = await get(`/document/${randomUUID()}`);
+    expect(res.status).toBe(404);
+  });
+
+  test("conversation list and clear succeed with automatic guest session", async () => {
+    expect((await get("/conversations")).status).toBe(200);
+    expect((await get("/conversations", { method: "DELETE" })).status).toBe(200);
+    expect((await get(`/conversations/${randomUUID()}`, { method: "DELETE" })).status).toBe(404);
+  });
+
+  test("forged session cookie falls back to a fresh guest session (signature check)", async () => {
+    const forgedId = randomUUID();
+    const res = await get("/auth/me", {
+      headers: { Cookie: `rag_user=${forgedId}.forged-signature` },
     });
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id?: string };
+    expect(body.id).toBeTruthy();
+    expect(body.id).not.toBe(forgedId);
   });
 
-  test("auth flow start redirects to Google consent or reports missing config", async () => {
-    const res = await get("/auth/google");
-    if (res.status === 302) {
-      const location = res.headers.get("location") ?? "";
-      const url = new URL(location);
-      expect(url.host).toBe("accounts.google.com");
-      expect(url.searchParams.get("client_id")).toBeTruthy();
-      expect(url.searchParams.get("state")).toBeTruthy();
-      // State cookie must be set so the callback can validate the round-trip.
-      const setCookie = res.headers.get("set-cookie") ?? "";
-      expect(setCookie).toContain("rag_oauth_state=");
-    } else {
-      // Dev environment without Google credentials — must fail loudly, not silently.
-      expect(res.status).toBe(503);
-    }
-  });
-
-  test("OAuth callback with bad state is rejected (CSRF guard)", async () => {
-    const res = await get(`/auth/google/callback?code=fake&state=${randomUUID()}`);
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toContain("auth=invalid_state");
+  test("legacy Google OAuth endpoints return 404", async () => {
+    expect((await get("/auth/google")).status).toBe(404);
+    expect((await get(`/auth/google/callback?code=fake&state=${randomUUID()}`)).status).toBe(404);
   });
 });

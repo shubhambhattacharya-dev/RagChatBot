@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, chore/project-setup]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,13 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
-      - run: bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat tests/auth tests/utils tests/health
+      - run: bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat tests/auth tests/utils tests/health tests/config tests/integration tests/e2e/rag-pipeline.test.ts
+      - name: Frontend lint and smoke tests
+        working-directory: Frontend
+        run: |
+          npm ci
+          npm run check
+          npm run syntax
 
   deployment-smoke:
     name: Production health smoke test

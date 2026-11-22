@@ -685,7 +685,7 @@ function renderDocs() {
           <span class="doc-submeta">${[size, isReady ? 'Indexed' : isFailed ? 'Failed' : 'Indexing…'].filter(Boolean).join(' · ')}</span>
         </div>
       </div>
-      <span class="doc-status-dot ${isReady ? 'ready' : isFailed ? 'failed' : 'indexing'}" title="${isReady ? 'Ready' : 'Indexing'}"></span>
+      <span class="doc-status-dot ${isReady ? 'ready' : isFailed ? 'failed' : 'indexing'}" title="${isReady ? 'Ready' : isFailed ? 'Failed' : 'Indexing'}"></span>
       <button class="doc-delete-btn" title="Delete document" aria-label="Delete document">
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
           <path d="M3 4.5H13M5.5 4.5V3C5.5 2.5 5.8 2 6.5 2H9.5C10.2 2 10.5 2.5 10.5 3V4.5M12 4.5V13C12 13.5 11.5 14 11 14H5C4.5 14 4 13.5 4 13V4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -707,12 +707,21 @@ function renderDocs() {
         e.stopPropagation();
         if (!confirm(`Delete "${doc.filename}"?`)) return;
         try {
-          await fetchWithTimeout(apiUrl(`/document/${encodeURIComponent(doc.id)}`), { method: 'DELETE' }, 15_000);
+          const r = await fetchWithTimeout(apiUrl(`/document/${encodeURIComponent(doc.id)}`), {
+            method: 'DELETE',
+            credentials: 'include',
+          }, 15_000);
+          if (r.status === 401) return handleAuthExpired();
+          if (!r.ok && r.status !== 404) throw new Error('Delete failed');
         } catch {
-          // Local removal fallback
+          toast('Could not delete document. Please try again.', 'error');
+          return;
         }
         state.docs = state.docs.filter(d => d.id !== doc.id);
-        if (state.activeDocId === doc.id) state.activeDocId = null;
+        if (state.activeDocId === doc.id) {
+          state.activeDocId = null;
+          persistState();
+        }
         renderDocs();
         toast('Document deleted', 'success', 2000);
       });
@@ -927,8 +936,8 @@ function renderSourcesHTML(sources) {
     const page = typeof s === 'object' && s.page ? `Page ${s.page}` : '';
     const score = typeof s === 'object' && typeof s.score === 'number' ? `${s.score}% grounded` : '';
     const detail = [page, score].filter(Boolean).join(' · ');
-    const badgeType = ext === 'docx' ? 'docx' : ext === 'md' ? 'md' : 'pdf';
-    const iconLabel = badgeType === 'docx' ? 'DOC' : badgeType === 'md' ? 'MD' : 'PDF';
+    const badgeType = ext === 'docx' ? 'docx' : ext === 'md' ? 'md' : ext === 'txt' ? 'txt' : 'pdf';
+    const iconLabel = badgeType === 'docx' ? 'DOC' : badgeType === 'md' ? 'MD' : badgeType === 'txt' ? 'TXT' : 'PDF';
 
     return `
       <div class="source-citation-card source-chip" title="${escapeHTML(filename)}">

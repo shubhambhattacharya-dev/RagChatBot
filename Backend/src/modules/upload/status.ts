@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import prisma from "../../config/prisma";
 import { minio } from "../../config/minio";
 import { env } from "../../config/env";
@@ -26,7 +27,11 @@ export async function statusRoutes(app: FastifyInstance) {
   // Ownership-scoped lookups 404 on other users' documents — same response as
   // a missing id, so document identifiers can't be probed across accounts.
   app.get("/document/:id", { preHandler: requireUser }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const parsed = z.string().uuid().safeParse((request.params as { id?: string }).id);
+    if (!parsed.success) {
+      return reply.status(400).send({ message: "Invalid document id" });
+    }
+    const id = parsed.data;
 
     const doc = await prisma.document.findFirst({
       where: {
@@ -44,7 +49,11 @@ export async function statusRoutes(app: FastifyInstance) {
   });
 
   app.delete("/document/:id", { preHandler: requireUser }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const parsed = z.string().uuid().safeParse((request.params as { id?: string }).id);
+    if (!parsed.success) {
+      return reply.status(400).send({ message: "Invalid document id" });
+    }
+    const id = parsed.data;
 
     const existing = await prisma.document.findFirst({
       where: { id, ownerId: request.user!.id },
@@ -73,7 +82,11 @@ export async function statusRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { id: string } }>('/admin/retry/:id', { preHandler: requireUser }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const parsed = z.string().uuid().safeParse((request.params as { id?: string }).id);
+    if (!parsed.success) {
+      return reply.status(400).send({ message: "Invalid document id" });
+    }
+    const id = parsed.data;
     const result = await retryDeadLetter(id);
 
     if (!result.requeued) {

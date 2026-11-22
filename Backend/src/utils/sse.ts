@@ -17,7 +17,13 @@ export function setupSSE(reply: FastifyReply) {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
-    ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin, Vary: "Origin" } : {}),
+    ...(allowedOrigin
+      ? {
+          "Access-Control-Allow-Origin": allowedOrigin,
+          "Access-Control-Allow-Credentials": "true",
+          Vary: "Origin",
+        }
+      : {}),
   });
 
   reply.raw.flushHeaders?.();

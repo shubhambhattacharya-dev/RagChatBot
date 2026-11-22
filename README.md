@@ -1,6 +1,6 @@
 # RagChatBot — Production RAG Document Intelligence
 
-> Retrieval-Augmented Generation over PDF documents with Google sign-in, per-user document ownership, hybrid search, anti-hallucination grounding, and real-time streaming.
+> Retrieval-Augmented Generation over PDF, DOCX, TXT, and Markdown documents with instant open-sandbox guest sessions, per-session document ownership, hybrid search (vector + lexical + metadata RRF), anti-hallucination grounding, and real-time SSE streaming.
 
 **Live Demo:** [ragchatbot-61jh.onrender.com](https://ragchatbot-61jh.onrender.com/)
 
@@ -47,21 +47,20 @@
 
 ## Key Features
 
-### Google Sign-In & Document Ownership
+### Open Sandbox Sessions & Document Ownership
 
-Every visitor signs in with their Google account (Gmail-style account chooser). Uploads, chat retrieval, document listing, and deletion are all scoped to the signed-in owner:
+Every visitor automatically receives an isolated, cryptographically signed guest sandbox session (`rag_user` cookie) on arrival — zero login friction for recruiters or live demos while keeping uploads, chat retrieval, document listing, and deletion scoped to the session owner:
 
 ```
-Sign in with Google → OAuth 2.0 code flow → httpOnly signed session cookie
-                                                    ↓
-Upload / List / Delete / Chat → every query filtered by ownerId
+First visit → Auto-provision guest UUID → httpOnly signed session cookie (30d)
+                                                     ↓
+Upload / List / Delete / Chat → every query filtered by ownerId (or shared seed docs)
 ```
 
-- **OAuth 2.0 Authorization Code flow** implemented directly on `fetch` (no auth SDK dependency)
-- **CSRF-protected callback** — state parameter validated with a timing-safe comparison
-- **Session cookie** — signed, `httpOnly`, `SameSite=Lax`, `Secure` in production, 30-day lifetime
-- **404 (not 403) on other users' documents** — no cross-account existence leaks
-- Legacy documents uploaded before auth have no owner and stay invisible until re-uploaded
+- **Frictionless Open Sandbox** — visitors land directly in the chat workspace without an OAuth wall, with one-click session reset (`POST /auth/reset`)
+- **Session cookie** — HMAC-signed, `httpOnly`, `SameSite=Lax`, `Secure` in production, 30-day lifetime
+- **404 (not 403) on other sessions' documents & conversations** — no cross-session existence leaks
+- **Shared corpus support** — seed documents (`ownerId = null`) remain queryable across sessions while user uploads stay private to their session
 
 ### Hybrid Retrieval
 
@@ -162,13 +161,8 @@ data: [DONE]
 ### Prerequisites
 
 - [Bun](https://bun.sh) v1.0+
-- [Docker](https://docker.com) (for local PostgreSQL + MinIO)
+- [Docker](https://docker.com) (for local PostgreSQL + MinIO + Redis)
 - API keys: Gemini and Groq
-- Google OAuth credentials (sign-in):
-  1. Open [console.cloud.google.com](https://console.cloud.google.com) → **APIs & Services → OAuth consent screen** → create an app (External is fine)
-  2. **Credentials → Create Credentials → OAuth client ID → Web application**
-  3. Add redirect URI: `http://localhost:3000/auth/google/callback` (and your production URL, e.g. `https://your-app.onrender.com/auth/google/callback`)
-  4. Copy the client ID and secret into `.env`
 
 ### Local Development
 
@@ -180,10 +174,10 @@ cd RagChatBot/Backend
 # Install dependencies
 bun install
 
-# Start local services (PostgreSQL + MinIO)
+# Start local services (PostgreSQL + MinIO + Redis)
 docker compose up -d
 
-# Set up database schema
+# Set up database schema & pgvector HNSW index
 bun run db:setup
 
 # Copy environment template
@@ -206,11 +200,10 @@ GROQ_API=your-groq-api-key
 MINIO_ENDPOINT=http://localhost:9000
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
-GOOGLE_CLIENT_ID=your-oauth-client-id
-GOOGLE_CLIENT_SECRET=your-oauth-client-secret
+SESSION_SECRET=replace-with-at-least-32-char-random-secret
 
 # Optional
-OPENROUTER_API=your-openrouter-key  # Fallback for Groq
+REDIS_URL=redis://localhost:6379
 CORS_ORIGIN=http://localhost:5500    # For Live Server dev
 LOG_LEVEL=info
 ```
@@ -219,17 +212,15 @@ LOG_LEVEL=info
 
 ## API Endpoints
 
-### Authentication
+### Session & Sandbox Auth
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /auth/google` | Start Google OAuth (redirects to consent screen) |
-| `GET /auth/google/callback` | OAuth callback — sets the session cookie |
-| `GET /auth/me` | Current signed-in user (401 when signed out) |
+| `GET /auth/me` | Current guest sandbox session (auto-initializes signed cookie if new visitor) |
 | `POST /auth/reset` | Reset the guest sandbox session (clears the session cookie) |
 | `POST /auth/logout` | Clear the session cookie |
 
-All `/upload`, `/documents`, `/document/:id`, `/chat`, and `/conversations` endpoints require a signed-in session and are scoped to the owner.
+All `/upload`, `/documents`, `/document/:id`, `/chat`, and `/conversations` endpoints automatically attach or provision a signed guest session and scope data to the session owner.
 
 ### Upload Document
 
@@ -305,13 +296,14 @@ The suite is layered like a production test pyramid — each layer catches a cla
 
 | Layer | What it verifies | Command |
 |-------|------------------|---------|
-| **Unit** | Chunking, extraction, query expansion, RRF merge, auth helpers, SSE, timeouts, circuit breakers, rate limiter, ownership SQL shape | `bun run test` |
+| **Unit & Pipeline** | Chunking, extraction, query expansion, RRF merge, auth helpers, SSE, timeouts, circuit breakers, rate limiter, dead-letter queue, ownership SQL shape | `bun run test` |
 | **Integration (real Postgres + pgvector)** | The chat pipeline's *actual raw SQL* against a live database: cross-user isolation for vector/lexical/owner search, owner-scoped conversation deletion | `RUN_INTEGRATION_TESTS=1 bun run test:integration` |
 | **Live retrieval / LLM** | Real Gemini embeddings, real Groq/Gemini inference | `RUN_LIVE_RETRIEVAL_TESTS=1 bun run test:retrieval` · `RUN_LIVE_LLM_TESTS=1 bun run test:llm` |
-| **E2E auth (live API)** | Every protected route 401s without a session, forged cookies are rejected, OAuth CSRF guard, public/protected route map | `RUN_E2E_TESTS=1 API_BASE=http://localhost:3001 bun test tests/e2e/auth.test.ts` |
+| **E2E auth (live API)** | Guest sandbox auto-provisioning, forged cookie signature rejection, public/protected route map | `RUN_E2E_TESTS=1 API_BASE=http://localhost:3000 bun test tests/e2e/auth.test.ts` |
+| **Frontend & Playwright E2E** | ESLint, Node smoke tests, and 3 real Chromium browser E2E flows (streaming answer, SSE error propagation, conversation deletion) | `cd Frontend && npm run check && npm run test:e2e` |
 | **RAG eval (golden set)** | Answer accuracy, grounded refusals, source attribution, latency percentiles, plus LLM-as-judge **faithfulness** and **answer relevance** (RAGAS-style) | `API_BASE=... EVAL_COOKIE="rag_user=..." bun run test:eval` |
 
-The verified offline unit run (`bun run test`) passed **235 tests (2 skipped, 0 failures)** across 13 suites (out of 324 total tests across unit, database integration, live provider, and E2E suites). Live, database, and
+The verified offline backend run (`bun run test`) passed **273 tests (2 skipped, 0 failures)** across 17 suites, plus **9 Frontend unit/Playwright E2E tests**. Live, database, and
 provider tests are intentionally skipped unless their environment flags and
 external dependencies are configured.
 
@@ -426,9 +418,8 @@ See [INTERVIEW.md](INTERVIEW.md) for a comprehensive interview guide with:
 
 ## Known Limitations
 
-- **Google account required** — all API routes are auth-gated; there is no anonymous/local bypass
-- **Cookie-based sessions are not server-revocable** — sign-out clears the client cookie; a signed-out cookie stays valid until expiry unless `SESSION_SECRET` is rotated
-- **Legacy documents are invisible** — rows uploaded before auth have `ownerId = null` and must be re-uploaded by their owner
+- **Cookie-based guest sessions** — resetting the sandbox or clearing browser cookies starts a new isolated guest session; rotating `SESSION_SECRET` invalidates existing sessions
+- **Shared seed documents** — rows with `ownerId = null` act as shared corpus documents visible across guest sessions, while user-uploaded documents remain strictly private to the uploading session
 - **Scanned PDFs** — image-only PDFs require OCR, which is not included
 - **Provider availability** — model IDs and free-tier quotas can change
 - **Free tier constraints** — Render sleeps after 15min inactivity; UptimeRobot pings keep it alive
@@ -438,14 +429,14 @@ See [INTERVIEW.md](INTERVIEW.md) for a comprehensive interview guide with:
 ## Future Improvements
 
 - [x] RAGAS-style evaluation metrics (LLM-as-judge faithfulness + answer relevance in the eval harness)
-- [ ] Structured logging with Pino + Sentry error tracking
+- [x] Structured logging with Pino + OpenTelemetry / Langfuse tracing
 - [ ] Server-side session store (Redis) for instant session revocation
 - [ ] Multi-turn conversation context fed back into the RAG prompt
-- [ ] Multi-file upload with progress tracking
-- [ ] Admin dashboard for document management
-- [x] Rate limiting per IP
+- [x] Multi-file upload with real-time byte progress tracking
+- [ ] Admin dashboard UI for dead-letter document management
+- [x] Rate limiting per IP (Redis sliding window + Lua script)
 - [x] CI/CD pipeline (GitHub Actions)
-- [x] Authentication and tenant isolation (Google OAuth 2.0 + per-user document ownership)
+- [x] Per-session tenant isolation (HMAC-signed HttpOnly session cookies + owner-scoped queries)
 - [x] Chat history persistence (PostgreSQL)
 
 ---
