@@ -42,14 +42,31 @@ async function handleChatInternal(question: string, userId: string, reply: Fasti
   const cleanQ = question.trim().toLowerCase();
 
   if (/^(hi|hello|hey|greetings|start|help|hii|hiii|hey2)$/i.test(cleanQ)) {
-    const greetingMsg = `Hello! 👋 I am your RAG Document Intelligence Assistant.
+    // Personalized greeting: reference the user's actual indexed documents
+    let docContext = "";
+    try {
+      const docs = await prisma.document.findMany({
+        where: { OR: [{ ownerId: userId }, { ownerId: null }] },
+        select: { filename: true, status: true },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      });
+      const ready = docs.filter((d) => d.status === "READY");
+      if (ready.length > 0) {
+        docContext = `\n\n**Indexed documents:** ${ready.map((d) => d.filename).join(", ")}`;
+      }
+    } catch {
+      // A failed lookup must never break the greeting
+    }
 
-Ask me any question about your uploaded documents.
+    const greetingMsg = `Hello! I am your RAG Document Intelligence Assistant.${docContext}
+
+I answer strictly from your uploaded documents — grounded, with sources.
 
 **Try asking:**
-- *Who are the authors of Attention Is All You Need?*
-- *What is Manish's email or phone number?*
-- *What projects and skills does Shubham have?*`;
+- *Summarize the document in five bullet points*
+- *List every contact detail you can find*
+- *What are the main topics or skills covered?*`;
 
     sendSSE(reply, { type: "token", content: greetingMsg });
     sendSSE(reply, { type: "sources", count: 0, documents: [], chunks: [] });
@@ -63,7 +80,7 @@ Ask me any question about your uploaded documents.
     if (!reply.raw.destroyed && !reply.raw.writableEnded) {
       sendSSE(reply, {
         type: "token",
-        content: "> ❌ **Error**: Request timed out. Please try a simpler question or a different document.",
+        content: "> **Error**: Request timed out. Please try a simpler question or a different document.",
       });
       sendSSEDone(reply);
     }
@@ -78,7 +95,7 @@ Ask me any question about your uploaded documents.
     sendSSE(reply, {
       type: "status",
       step: "embedding",
-      message: "🔍 Generating query embedding vector...",
+      message: "Generating query embedding…",
     });
 
     const queryEmbedding = await embedText(expandedQuestion, "RETRIEVAL_QUERY", abortController.signal);
@@ -89,7 +106,7 @@ Ask me any question about your uploaded documents.
     sendSSE(reply, {
       type: "status",
       step: "retrieval",
-      message: "⚡ Searching pgvector database...",
+      message: "Searching the knowledge base…",
     });
 
     const docFilter = buildDocFilter(userId, documentId);
@@ -159,7 +176,7 @@ Ask me any question about your uploaded documents.
     sendSSE(reply, {
       type: "status",
       step: "retrieval_complete",
-      message: `⚡ Retrieved ${relevant.length} relevant chunks (top distance: ${topDist})`,
+      message: `Found ${relevant.length} relevant sections`,
     });
 
     if (contextChunks.length === 0) {
@@ -175,7 +192,7 @@ Ask me any question about your uploaded documents.
     sendSSE(reply, {
       type: "status",
       step: "generation",
-      message: "🤖 Streaming AI response...",
+      message: "Generating answer…",
     });
 
     const usageRef: { current: TokenUsage | null } = { current: null };
@@ -211,7 +228,7 @@ Ask me any question about your uploaded documents.
         : `Failed to process your request: ${detail}`;
       sendSSE(reply, {
         type: "token",
-        content: `> ❌ **Error**: ${userMessage}`,
+        content: `> **Error**: ${userMessage}`,
       });
     }
   } finally {

@@ -91,13 +91,14 @@ export async function buildApp(){
     await app.register(cookie, { secret: env.SESSION_SECRET })
     await app.register(cors, {
       origin: corsOrigins.length > 0 ? corsOrigins : false,
+      credentials: true, // Live Server / cross-port dev setup sends the session cookie
       methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
     })
     await app.register((await import("fastify-metrics")).default, {
       endpoint: env.METRICS_ENABLED ? "/metrics" : null,
       defaultMetrics: { enabled: env.METRICS_ENABLED },
     });
-    await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024, files: 1, parts: 2 } });
+    await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1, parts: 2 } });
     app.addHook("onSend", async (_request, reply) => {
       reply.header("X-Content-Type-Options", "nosniff");
       reply.header("X-Frame-Options", "DENY");

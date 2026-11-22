@@ -192,9 +192,15 @@ if (el.sidebarCollapseBtn) {
 
 if (el.mobileMenuBtn) {
   el.mobileMenuBtn.addEventListener('click', () => {
-    el.sidebar.classList.add('open');
-    el.overlay.classList.add('visible');
-    document.body.style.overflow = 'hidden';
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      // Drawer mode (tablet/phone): slide the sidebar in over an overlay
+      el.sidebar.classList.add('open');
+      el.overlay.classList.add('visible');
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Desktop: the header ☰ re-opens a collapsed sidebar
+      el.sidebar.classList.remove('collapsed');
+    }
   });
 }
 
@@ -314,7 +320,7 @@ function renderUserChip(user) {
 
 async function bootstrapAuth() {
   try {
-    const r = await fetchWithTimeout(apiUrl('/auth/me'), { credentials: 'same-origin' }, 8000);
+    const r = await fetchWithTimeout(apiUrl('/auth/me'), { credentials: 'include' }, 8000);
     if (r.ok) {
       const user = await r.json();
       renderUserChip(user);
@@ -335,7 +341,7 @@ function handleAuthExpired() {
 if (el.logoutBtn) {
   el.logoutBtn.addEventListener('click', async () => {
     try {
-      await fetchWithTimeout(apiUrl('/auth/reset'), { method: 'POST', credentials: 'same-origin' }, 8000);
+      await fetchWithTimeout(apiUrl('/auth/reset'), { method: 'POST', credentials: 'include' }, 8000);
     } catch { /* clearing client-side anyway */ }
     toast('Sandbox session reset — starting fresh', 'info', 1500);
     setTimeout(() => {
@@ -479,55 +485,112 @@ async function handleFiles(files) {
   }
 
   for (const file of validFiles) {
-    addFileProgressItem(file, 'uploading');
+    addFileProgressItem(file);
     try {
-      const res = await uploadFile(file);
-      updateFileProgressItem(file, 'processing');
-      toast(`${file.name} uploaded`, 'success', 2000);
+      const res = await uploadFile(file, (pct) => setFileProgress(file, 'uploading', pct));
+      setFileProgress(file, 'indexing');
       pollStatus(res.documentId || res.id, file);
     } catch (error) {
-      updateFileProgressItem(file, 'failed');
+      setFileProgress(file, 'failed');
       toast(`${file.name} upload failed: ${error.message}`, 'error', 5_000);
     }
   }
 }
 
-async function uploadFile(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  const res = await fetchWithTimeout(apiUrl('/upload'), { method: 'POST', body: fd }, 120_000);
-  const body = await res.json().catch(() => ({}));
-  if (res.status === 401) { handleAuthExpired(); throw new Error('Sign in required'); }
-  if (!res.ok) throw new Error(body.error || body.message || 'Upload failed');
-  return body;
+function uploadFile(file, onProgress) {
+  // XHR (not fetch) so real upload-bytes progress is possible — no fake percentages.
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', apiUrl('/upload'));
+    xhr.withCredentials = true; // carry the guest session cookie cross-origin (Live Server dev setup)
+    xhr.timeout = 120_000;
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText); } catch { /* empty body */ }
+      if (xhr.status === 401) { handleAuthExpired(); reject(new Error('Sign in required')); return; }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(body.error || body.message || `Upload failed (${xhr.status})`));
+        return;
+      }
+      resolve(body);
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.ontimeout = () => reject(new Error('Upload timed out'));
+    xhr.send(fd);
+  });
 }
 
-function addFileProgressItem(file, status) {
+const uploadTimers = new Map();
+
+function elapsedLabel(startedAt) {
+  const secs = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+  return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+function addFileProgressItem(file) {
   if (!el.fileList) return;
   const existing = [...el.fileList.querySelectorAll('.upload-file-item')]
     .find((item) => item.dataset.name === file.name);
   if (existing) existing.remove();
 
+  const startedAt = Date.now();
   const item = document.createElement('div');
   item.className = 'upload-file-item';
   item.dataset.name = file.name;
   item.innerHTML = `
-    <span>${escapeHTML(file.name)}</span>
-    <span class="file-status">${status === 'uploading' ? 'Uploading…' : 'Indexing…'}</span>
+    <div class="upload-file-main">
+      <span class="upload-file-name">${escapeHTML(file.name)}</span>
+      <span class="file-status upload-file-status">Uploading · 0% · 0s</span>
+    </div>
+    <div class="upload-file-bar"><div class="upload-file-bar-fill"></div></div>
   `;
   el.fileList.appendChild(item);
+
+  const timer = setInterval(() => {
+    const status = item.querySelector('.upload-file-status');
+    if (!status) return;
+    const stage = item.dataset.stage || 'Uploading';
+    const pct = item.dataset.pct || '';
+    status.textContent = pct ? `${stage} · ${pct}% · ${elapsedLabel(startedAt)}` : `${stage} · ${elapsedLabel(startedAt)}`;
+  }, 1000);
+  uploadTimers.set(file.name, { item, timer, startedAt });
 }
 
-function updateFileProgressItem(file, status) {
+function setFileProgress(file, stage, percent) {
   if (!el.fileList) return;
   const item = [...el.fileList.querySelectorAll('.upload-file-item')]
     .find((element) => element.dataset.name === file.name);
   if (!item) return;
-  if (status === 'ready') {
+  const fill = item.querySelector('.upload-file-bar-fill');
+  const status = item.querySelector('.file-status');
+  const tracked = uploadTimers.get(file.name);
+  const startedAt = tracked ? tracked.startedAt : Date.now();
+
+  if (stage === 'uploading') {
+    item.dataset.stage = 'Uploading';
+    item.dataset.pct = String(percent ?? 0);
+    if (fill) { fill.classList.remove('indeterminate'); fill.style.width = `${percent ?? 0}%`; }
+    if (status) status.textContent = `Uploading · ${percent ?? 0}% · ${elapsedLabel(startedAt)}`;
+  } else if (stage === 'indexing') {
+    item.dataset.stage = 'Indexing';
+    item.dataset.pct = '';
+    if (fill) fill.classList.add('indeterminate');
+    if (status) status.textContent = `Indexing · ${elapsedLabel(startedAt)}`;
+  } else if (stage === 'ready') {
+    if (tracked) clearInterval(tracked.timer);
+    uploadTimers.delete(file.name);
     item.remove();
+    toast(`${file.name} indexed in ${elapsedLabel(startedAt)}`, 'success', 2500);
   } else {
-    const s = item.querySelector('.file-status');
-    if (s) s.textContent = status === 'processing' ? 'Indexing…' : 'Failed';
+    if (tracked) clearInterval(tracked.timer);
+    uploadTimers.delete(file.name);
+    item.classList.add('failed');
+    if (status) status.textContent = `Failed · ${elapsedLabel(startedAt)}`;
   }
 }
 
@@ -535,17 +598,17 @@ async function pollStatus(docId, file) {
   for (let i = 0; i < 40; i++) {
     await sleep(2000);
     try {
-      const r = await fetchWithTimeout(apiUrl(`/document/${encodeURIComponent(docId)}`), {}, 10_000);
+      const r = await fetchWithTimeout(apiUrl(`/document/${encodeURIComponent(docId)}`), { credentials: 'include' }, 10_000);
       if (!r.ok) throw new Error('Unable to retrieve document status');
       const doc = await r.json();
       if (doc.status === 'READY' || doc.status === 'ready') {
-        updateFileProgressItem(file, 'ready');
+        setFileProgress(file, 'ready');
         state.docs.push(doc);
         await loadDocs();
         return;
       }
       if (doc.status === 'FAILED' || doc.status === 'failed') {
-        updateFileProgressItem(file, 'error');
+        setFileProgress(file, 'failed');
         toast(`Failed to process ${file.name}`, 'error');
         return;
       }
@@ -553,14 +616,14 @@ async function pollStatus(docId, file) {
       // Retry
     }
   }
-  updateFileProgressItem(file, 'error');
+  setFileProgress(file, 'failed');
   toast(`${file.name} timed out`, 'error');
 }
 
 // ==================== DOCUMENTS LIST ====================
 async function loadDocs() {
   try {
-    const r = await fetchWithTimeout(apiUrl('/documents'), {}, 10_000);
+    const r = await fetchWithTimeout(apiUrl('/documents'), { credentials: 'include' }, 10_000);
     if (r.status === 401) return handleAuthExpired();
     if (!r.ok) throw new Error('Failed to load documents');
     const docs = await r.json();
@@ -662,7 +725,7 @@ function renderDocs() {
 // ==================== CONVERSATIONS / HISTORY ====================
 async function loadRemoteHistory() {
   try {
-    const r = await fetchWithTimeout(apiUrl('/conversations'), { credentials: 'same-origin' }, 10_000);
+    const r = await fetchWithTimeout(apiUrl('/conversations'), { credentials: 'include' }, 10_000);
     if (!r.ok) throw new Error('Unable to load conversation history');
     const conversations = await r.json();
     if (Array.isArray(conversations) && conversations.length > 0) {
@@ -747,7 +810,7 @@ async function deleteConversation(conv) {
   try {
     const r = await fetchWithTimeout(apiUrl(`/conversations/${encodeURIComponent(conv.id)}`), {
       method: 'DELETE',
-      credentials: 'same-origin',
+      credentials: 'include',
     }, 10_000);
     if (r.status === 401) return handleAuthExpired();
     if (!r.ok) throw new Error('Delete failed');
@@ -797,7 +860,7 @@ if (el.newConversationBtn) {
 if (el.clearBtn) {
   el.clearBtn.addEventListener('click', () => {
     clearChatArea();
-    fetchWithTimeout(apiUrl('/conversations'), { method: 'DELETE', credentials: 'same-origin' }, 10_000)
+    fetchWithTimeout(apiUrl('/conversations'), { method: 'DELETE', credentials: 'include' }, 10_000)
       .catch((err) => console.warn('Unable to clear remote history', err));
   });
 }
@@ -918,7 +981,7 @@ async function executeChatMessage(question) {
       </div>
       <div class="stream-status-box" id="activeStreamStatus">
         <div class="stream-spinner"></div>
-        <span id="activeStreamMsg">Searching knowledge base with ${state.searchMode} search...</span>
+        <span id="activeStreamMsg">Searching knowledge base…</span>
       </div>
       <div class="message-text message-content"></div>
     </div>
@@ -947,6 +1010,7 @@ async function executeChatMessage(question) {
   try {
     const res = await fetch(apiUrl(`/chat?question=${encodeURIComponent(question)}${docParam}`), {
       signal: activeRequestController.signal,
+      credentials: 'include',
       headers: { Accept: 'text/event-stream' },
     });
 
@@ -1068,6 +1132,9 @@ function renderMD(text) {
   if (!text) return '';
   let html = escapeHTML(text);
 
+  // Strip provider citation markers (e.g. 【1†L1-L4】) — real sources are shown as chips below the answer
+  html = html.replace(/【\d+†[^】]*】/g, '');
+
   // 1. Code blocks
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>');
 
@@ -1108,7 +1175,7 @@ function renderMD(text) {
   setViewMode('welcome');
 })();
 
-console.log('✨ RAG Chat initialized with perfect single-input flow and pure Gray/Black Dark Mode');
+console.log('RAG Chat initialized');
 
 
 // ==================== v2.1: Example chips (delegated, isolated) ====================
