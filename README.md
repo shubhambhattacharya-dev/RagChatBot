@@ -2,7 +2,7 @@
 
 > Retrieval-Augmented Generation over PDF documents with Google sign-in, per-user document ownership, hybrid search, anti-hallucination grounding, and real-time streaming.
 
-**Live Demo:** [ragchatbot-61jh.onrender.com](https://ragchatbot-61jh.onrender.com/)
+**Live Demo:** [ragchatbot-5x9g.onrender.com](https://ragchatbot-5x9g.onrender.com/)
 
 ---
 
@@ -226,6 +226,7 @@ LOG_LEVEL=info
 | `GET /auth/google` | Start Google OAuth (redirects to consent screen) |
 | `GET /auth/google/callback` | OAuth callback — sets the session cookie |
 | `GET /auth/me` | Current signed-in user (401 when signed out) |
+| `POST /auth/reset` | Reset the guest sandbox session (clears the session cookie) |
 | `POST /auth/logout` | Clear the session cookie |
 
 All `/upload`, `/documents`, `/document/:id`, `/chat`, and `/conversations` endpoints require a signed-in session and are scoped to the owner.
@@ -310,7 +311,7 @@ The suite is layered like a production test pyramid — each layer catches a cla
 | **E2E auth (live API)** | Every protected route 401s without a session, forged cookies are rejected, OAuth CSRF guard, public/protected route map | `RUN_E2E_TESTS=1 API_BASE=http://localhost:3001 bun test tests/e2e/auth.test.ts` |
 | **RAG eval (golden set)** | Answer accuracy, grounded refusals, source attribution, latency percentiles, plus LLM-as-judge **faithfulness** and **answer relevance** (RAGAS-style) | `API_BASE=... EVAL_COOKIE="rag_user=..." bun run test:eval` |
 
-The verified offline run passed **249 tests with 0 failures**. Live, database, and
+The verified offline unit run (`bun run test`) passed **235 tests (2 skipped, 0 failures)** across 13 suites (out of 324 total tests across unit, database integration, live provider, and E2E suites). Live, database, and
 provider tests are intentionally skipped unless their environment flags and
 external dependencies are configured.
 
@@ -369,7 +370,7 @@ RagChatBot/
 ├── Frontend/
 │   ├── index.html                    # Chat interface
 │   ├── app.js                        # Client-side logic
-│   └── style.css                     # Linear-inspired dark theme
+│   └── style.css                     # Minimal monochrome theme (light/dark)
 ├── docs/
 │   ├── architecture.png              # System architecture diagram
 │   └── recursive-chunking.png        # Chunking strategy diagram

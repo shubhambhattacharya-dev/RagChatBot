@@ -274,6 +274,13 @@ function formatCurrentTime() {
   return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatHistoryTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 function scrollBottom() {
   requestAnimationFrame(() => {
     if (el.messages) el.messages.scrollTop = el.messages.scrollHeight;
@@ -344,11 +351,13 @@ async function checkHealth() {
     if (r.ok) {
       el.statusDot.className = 'status-dot connected';
       el.statusLabel.textContent = 'Connected';
-    } else throw new Error();
+      return;
+    }
   } catch {
-    el.statusDot.className = 'status-dot connected';
-    el.statusLabel.textContent = 'Connected';
+    // fall through to the offline state
   }
+  el.statusDot.className = 'status-dot disconnected';
+  el.statusLabel.textContent = 'Offline';
 }
 checkHealth();
 setInterval(checkHealth, 20000);
@@ -564,7 +573,7 @@ async function loadDocs() {
 }
 
 function formatDocSize(bytes) {
-  if (!bytes) return '1.2 MB';
+  if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -610,7 +619,7 @@ function renderDocs() {
         </div>
         <div class="doc-text-meta">
           <span class="doc-filename">${escapeHTML(doc.filename)}</span>
-          <span class="doc-submeta">${size} · ${isReady ? 'Indexed' : isFailed ? 'Failed' : 'Indexing…'}</span>
+          <span class="doc-submeta">${[size, isReady ? 'Indexed' : isFailed ? 'Failed' : 'Indexing…'].filter(Boolean).join(' · ')}</span>
         </div>
       </div>
       <span class="doc-status-dot ${isReady ? 'ready' : isFailed ? 'failed' : 'indexing'}" title="${isReady ? 'Ready' : 'Indexing'}"></span>
@@ -660,7 +669,7 @@ async function loadRemoteHistory() {
       state.history = conversations.map((conv, idx) => ({
         id: conv.id || `conv-${idx}`,
         title: conv.messages?.find((m) => m.role === 'user')?.content || 'New Conversation',
-        time: formatCurrentTime(),
+        time: formatHistoryTime(conv.updatedAt || conv.createdAt),
         messages: (conv.messages || []).map((m) => ({
           role: m.role,
           content: m.content,
@@ -851,8 +860,10 @@ function renderSourcesHTML(sources) {
   const cardsHtml = firstThree.map((s) => {
     const filename = typeof s === 'string' ? s : s.filename || 'Document.pdf';
     const ext = filename.split('.').pop()?.toLowerCase() || 'pdf';
-    const page = s.page || 1;
-    const score = s.score || 92;
+    // Backend sends filenames only — never display page/score we were not given.
+    const page = typeof s === 'object' && s.page ? `Page ${s.page}` : '';
+    const score = typeof s === 'object' && typeof s.score === 'number' ? `${s.score}% grounded` : '';
+    const detail = [page, score].filter(Boolean).join(' · ');
     const badgeType = ext === 'docx' ? 'docx' : ext === 'md' ? 'md' : 'pdf';
     const iconLabel = badgeType === 'docx' ? 'DOC' : badgeType === 'md' ? 'MD' : 'PDF';
 
@@ -861,7 +872,7 @@ function renderSourcesHTML(sources) {
         <div class="source-icon-badge doc-type-icon ${badgeType}">${iconLabel}</div>
         <div class="source-meta-col">
           <span class="source-filename">${escapeHTML(filename)}</span>
-          <span class="source-detail">Page ${page} · ${score}% grounded</span>
+          ${detail ? `<span class="source-detail">${detail}</span>` : ''}
         </div>
       </div>
     `;
@@ -1009,42 +1020,16 @@ async function executeChatMessage(question) {
       return;
     }
 
-    console.info('Backend live streaming unavailable, rendering grounded interactive response', err);
-    
-    // Simulate streaming for smooth visual verification even when backend is in dev setup
+    console.info('Backend live streaming unavailable', err);
+
+    // Honest failure state — never fabricate an answer or sources.
     if (statusBox) statusBox.style.display = 'none';
-    
-    const simulatedAnswer = `Hello! I received your question: **"${escapeHTML(question)}"**.
-
-I am your Grounded Document Intelligence Assistant running with **${state.searchMode === 'hybrid' ? 'Hybrid Vector + BM25' : state.searchMode} search** (Top K: ${state.topK}).
-
-Here is what I found in your knowledge base:
-- **Direct Answer**: Your documents are processed and indexed for contextual grounding.
-- **Verification**: Strict anti-hallucination guardrails ensure all responses map directly to verified chunk citations.
-- **Status**: The frontend UI is operating at 100% fidelity. If your local backend server is not running, start it in \`Backend/\` via \`bun run dev\` or \`npm run dev\` for live database embeddings.`;
-
-    // Fast typewriter simulation
-    fullText = '';
-    const words = simulatedAnswer.split(' ');
-    for (const word of words) {
-      fullText += (fullText ? ' ' : '') + word;
-      contentEl.innerHTML = renderMD(fullText);
-      scrollBottom();
-      await sleep(18);
-    }
-
-    if (state.docs.length > 0) {
-      sources = state.docs.slice(0, 2).map((d, i) => ({
-        filename: d.filename,
-        page: i + 1,
-        score: 94 - i * 5
-      }));
-    } else {
-      sources = [
-        { filename: 'SystemGuide.pdf', page: 1, score: 96 },
-        { filename: 'Architecture.docx', page: 3, score: 89 }
-      ];
-    }
+    const errorBox = document.createElement('div');
+    errorBox.className = 'message-error';
+    errorBox.textContent = 'The backend is not responding. Start it (start-server.bat or `bun run dev` in Backend/) and try again.';
+    assistantRow.querySelector('.message-body-col').appendChild(errorBox);
+    scrollBottom();
+    return;
   } finally {
     clearTimeout(timeout);
     state.streaming = false;
@@ -1059,15 +1044,17 @@ Here is what I found in your knowledge base:
       scrollBottom();
     }
 
-    // Save message to conversation history
-    const activeConv = state.history.find(c => c.id === state.activeConversationId);
-    if (activeConv) {
-      if (!activeConv.messages) activeConv.messages = [];
-      activeConv.messages.push({ role: 'user', content: question, time: userTime });
-      activeConv.messages.push({ role: 'assistant', content: fullText, time: formatCurrentTime(), sources });
-      activeConv.title = question.slice(0, 30) + (question.length > 30 ? '…' : '');
-      activeConv.time = formatCurrentTime();
-      renderHistory();
+    // Save only real exchanges — a failed request leaves no fake history entry
+    if (fullText) {
+      const activeConv = state.history.find(c => c.id === state.activeConversationId);
+      if (activeConv) {
+        if (!activeConv.messages) activeConv.messages = [];
+        activeConv.messages.push({ role: 'user', content: question, time: userTime });
+        activeConv.messages.push({ role: 'assistant', content: fullText, time: formatCurrentTime(), sources });
+        activeConv.title = question.slice(0, 30) + (question.length > 30 ? '…' : '');
+        activeConv.time = formatCurrentTime();
+        renderHistory();
+      }
     }
 
     if (el.followUpInput) {

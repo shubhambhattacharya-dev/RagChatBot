@@ -5,11 +5,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RAG Chat — Grounded Document Intelligence</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-    rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -31,9 +26,9 @@
         <div class="brand-group">
           <div class="brand-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M2 17L12 22L22 17" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M2 12L12 17L22 12" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
           <div class="brand-text">
@@ -62,7 +57,7 @@
         <!-- Large Upload Box matching reference image -->
         <div class="large-upload-card" id="dropZone" role="button" tabindex="0" aria-label="Upload documents">
           <div class="upload-icon-circle">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 16V4M12 4L7 9M12 4L17 9"/>
               <path d="M4 17V19C4 20.1046 4.89543 21 6 21H18C19.1046 21 20 20.1046 20 19V17"/>
             </svg>
@@ -152,7 +147,7 @@
               </h1>
               <span class="badge-grounded">Grounded Engine</span>
             </div>
-            <p class="header-subtitle">Hybrid Search · Grounded Answers · Citations · <span class="accent-text">100% Eval-Verified</span></p>
+            <p class="header-subtitle">Hybrid Search · Grounded Answers · Citations</p>
           </div>
         </div>
 
@@ -207,42 +202,7 @@
             <textarea id="chatInput" rows="2" placeholder="Ask a question about your documents..." autofocus></textarea>
             
             <div class="hero-input-bottom">
-              <div class="hero-input-left">
-                <!-- Search Mode Dropdown -->
-                <div class="dropdown-wrapper" id="searchModeDropdown">
-                  <button type="button" class="filter-pill-btn" id="searchModeBtn" aria-haspopup="true" aria-expanded="false">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                      <polygon points="6 3 18 3 22 9 12 22 2 9" />
-                    </svg>
-                    <span id="currentSearchModeText">Hybrid Search</span>
-                    <svg class="chevron-icon" width="10" height="10" viewBox="0 0 12 12" fill="none">
-                      <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                  <div class="dropdown-menu" id="searchModeMenu" role="menu">
-                    <div class="dropdown-item active" data-value="hybrid">💎 Hybrid Search</div>
-                    <div class="dropdown-item" data-value="vector">⚡ Semantic Vector</div>
-                    <div class="dropdown-item" data-value="lexical">📝 Keyword BM25</div>
-                  </div>
-                </div>
-
-                <!-- Top K Dropdown -->
-                <div class="dropdown-wrapper" id="topKDropdown">
-                  <button type="button" class="filter-pill-btn" id="topKBtn" aria-haspopup="true" aria-expanded="false">
-                    <span id="currentTopKText">Top K: 6</span>
-                    <svg class="chevron-icon" width="10" height="10" viewBox="0 0 12 12" fill="none">
-                      <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                  <div class="dropdown-menu" id="topKMenu" role="menu">
-                    <div class="dropdown-item" data-value="3">Top K: 3</div>
-                    <div class="dropdown-item" data-value="4">Top K: 4</div>
-                    <div class="dropdown-item active" data-value="6">Top K: 6</div>
-                    <div class="dropdown-item" data-value="8">Top K: 8</div>
-                    <div class="dropdown-item" data-value="10">Top K: 10</div>
-                  </div>
-                </div>
-              </div>
+              <div class="hero-input-left"></div>
 
               <div class="hero-input-right">
                 <button class="tool-icon-btn" id="attachBtn" title="Attach Document" aria-label="Attach Document">
