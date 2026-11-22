@@ -25,7 +25,7 @@ jobs:
       - run: bunx tsc --noEmit
       - run: bun test tests/extraction tests/chunking tests/embedding tests/prompt tests/chat tests/auth tests/utils tests/health tests/config tests/integration tests/e2e/rag-pipeline.test.ts
       - name: Frontend lint and smoke tests
-        working-directory: Frontend
+        working-directory: ${{ github.workspace }}/Frontend
         run: |
           npm ci
           npm run check
