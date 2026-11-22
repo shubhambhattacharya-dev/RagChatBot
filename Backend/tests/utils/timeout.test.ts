@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { withTimeout, TimeoutError } from "../../src/utils/timeout";
 
 describe("withTimeout", () => {
@@ -18,7 +18,7 @@ describe("withTimeout", () => {
 
     try {
       await withTimeout(slow, 100);
-      expect.fail("Should have thrown");
+      throw new Error("Should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(TimeoutError);
       expect((err as TimeoutError).name).toBe("TimeoutError");

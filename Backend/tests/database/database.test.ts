@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import prisma from "../../src/config/prisma";
 
 const TEST_DOC_ID = "test-db-doc-0001";

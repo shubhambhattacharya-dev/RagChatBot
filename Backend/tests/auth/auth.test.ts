@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import fastify from "fastify";
 import cookie from "@fastify/cookie";
 import { existsSync } from "node:fs";

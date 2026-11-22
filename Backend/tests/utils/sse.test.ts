@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "bun:test";
 import { setupSSE, sendSSE, sendSSEDone } from "../../src/utils/sse";
 
 // ─── Mock Factory ───────────────────────────────────────────────────────────

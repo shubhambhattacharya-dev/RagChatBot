@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import prisma from "../../src/config/prisma";
 import { buildDocFilter } from "../../src/modules/chat/retrieval";

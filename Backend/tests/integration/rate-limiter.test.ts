@@ -1,4 +1,4 @@
-import { describe, expect, test, afterEach } from "vitest";
+import { describe, expect, test, afterEach } from "bun:test";
 import Fastify from "fastify";
 import { rateLimit, RateLimiter } from "../../src/utils/rate-limiter";
 

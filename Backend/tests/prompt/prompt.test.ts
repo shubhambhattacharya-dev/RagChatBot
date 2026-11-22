@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { buildChatMessages } from "../../src/provider/llm/groq";
 
 // Test 6 — prompt: the exact messages that reach the LLM must contain

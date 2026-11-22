@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { classifyError } from "../../src/modules/upload/dead-letter";
 
 describe("classifyError", () => {

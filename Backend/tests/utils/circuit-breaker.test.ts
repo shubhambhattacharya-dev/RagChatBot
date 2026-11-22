@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, test, vi, beforeEach, afterEach } from "bun:test";
 import { CircuitBreaker } from "../../src/utils/circuit-breaker";
 
 describe("CircuitBreaker", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi, beforeEach } from "bun:test";
 import { classifyError, markDeadLetter, getDeadLetters, retryDeadLetter } from "../../src/modules/upload/dead-letter";
 
 // Mock Prisma and Redis
@@ -164,7 +164,7 @@ describe("Dead-Letter Queue Integration", () => {
         { error: new Error("429 rate limit"), expectedReason: "rate_limit_exceeded" },
         { error: new Error("fetch failed"), expectedReason: "storage_error" },
         { error: new Error("Embedding generation failed"), expectedReason: "embedding_failed" },
-      ];
+      ] as const;
 
       for (const { error, expectedReason } of errors) {
         const { reason } = classifyError(error);

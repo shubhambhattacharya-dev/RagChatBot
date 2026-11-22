@@ -11,7 +11,7 @@
  * Uses vitest mocks to simulate external dependencies while testing
  * the real business logic in each pipeline stage.
  */
-import { describe, expect, test, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi, beforeEach } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

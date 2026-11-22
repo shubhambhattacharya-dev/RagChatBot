@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 
 // End-to-end authentication gate tests against the LIVE API (server running).

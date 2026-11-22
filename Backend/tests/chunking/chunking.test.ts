@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { chunkText, enrichChunks, estimateTokens } from "../../src/utils/chunking";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
